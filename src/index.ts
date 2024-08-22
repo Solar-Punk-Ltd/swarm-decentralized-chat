@@ -28,6 +28,7 @@ export {
     stopUserFetchProcess,
     getUserCount,
     setBeeUrl,
+    setUsersFeedTimeout,
 } from './core';
 
 // Utils

@@ -50,6 +50,11 @@ export function setBeeUrl(url: string) {
   bee = new Bee(url);
   console.info("Url was set to ", url);
 }
+let usersFeedTimeout = 8000;
+export function setUsersFeedTimeout(newValue: number) {
+  usersFeedTimeout = newValue;
+}
+
 // TODO this whole thing should be a class
 
 const emitter = new EventEmitter();
@@ -350,7 +355,7 @@ async function removeIdleUsers(topic: string, ownAddress: EthAddress, stamp: Bat
   } catch (error) {
     removeIdleIsRunning = false;
     console.error(error);
-    throw new Error('There was an error while removing idle users from the Users feed');
+    //throw new Error('There was an error while removing idle users from the Users feed');
   }
 }
 
@@ -365,7 +370,7 @@ async function writeUsersFeedCommit(topic: string, stamp: BatchId, activeUsers: 
     const userRef = await uploadObjectToBee(bee, uploadObject, stamp as any);
     if (!userRef) throw new Error('Could not upload user list to bee');
 
-    const feedWriter = graffitiFeedWriterFromTopic(bee, topic, { timeout: 8000 });
+    const feedWriter = graffitiFeedWriterFromTopic(bee, topic, { timeout: usersFeedTimeout });
 
     await feedWriter.upload(stamp, userRef.reference);
     console.log("Upload was successful!")    
