@@ -2,7 +2,7 @@ import { ethers, BytesLike, utils, Wallet } from 'ethers';
 import * as crypto from 'crypto';
 import { BatchId, Bee, BeeRequestOptions, Signer, UploadResult, Utils } from '@ethersphere/bee-js';
 import { EthAddress, IdleMs, MessageData, Sha3Message, UserActivity, UserWithIndex } from './types';
-import { CONSENSUS_ID, EVENTS, F_STEP, HEX_RADIX, IDLE_TIME, MAX_TIMEOUT, MESSAGE_FETCH_MAX, MESSAGE_FETCH_MIN } from './constants';
+import { CONSENSUS_ID, EVENTS, F_STEP, HEX_RADIX, IDLE_TIME, MAX_TIMEOUT, MESSAGE_FETCH_MAX, MESSAGE_FETCH_MIN, USER_LIMIT } from './constants';
 
 // Generate an ID for the feed, that will be connected to the stream, as Users list
 export function generateUsersFeedId(topic: string) {
@@ -246,8 +246,8 @@ export class RunningAverage {
 export function selectUsersFeedCommitWriter(activeUsers: UserWithIndex[], emitStateEvent: any): EthAddress {
   const minUsersToSelect = 3;
   const numUsersToselect = Math.max(Math.ceil(activeUsers.length * 0.3), minUsersToSelect);     // Select top 30% of activeUsers, but minimum 1
-  const sortedActiveUsers = activeUsers.sort((a, b) => b.timestamp - a.timestamp);              // Sort activeUsers by timestamp
-  const mostActiveUsers = sortedActiveUsers.slice(0, numUsersToselect);                         // Top 30% but minimum 3 (minUsersToSelect)
+  //const sortedActiveUsers = activeUsers.sort((a, b) => b.timestamp - a.timestamp);              // Sort activeUsers by timestamp
+  const mostActiveUsers = activeUsers.slice(0, numUsersToselect);                         // Top 30% but minimum 3 (minUsersToSelect)
 
 console.log("Most active users: ", mostActiveUsers);
   const sortedMostActiveAddresses = mostActiveUsers.map((user) => user.address).sort();
@@ -259,7 +259,7 @@ console.log("Most active users: ", mostActiveUsers);
   return mostActiveUsers[randomIndex].address;
 }
 
-// Gives back the currently active users, based on idle time calculation
+// Gives back the currently active users, based on idle time and user count limit calculation
 export function getActiveUsers(users: UserWithIndex[], userActivityTable: UserActivity): UserWithIndex[] {
   const idleMs: IdleMs = {};
   const now = Date.now();
@@ -280,8 +280,12 @@ console.log("Users inside removeIdle: ", users)
       return true;
     }
           
+    
     return idleMs[userAddr] < IDLE_TIME;
   });
 
-  return activeUsers;
+  // Sort activeUsers by their last activity timestamp (most recent first)
+  const sortedActiveUsers = activeUsers.sort((a, b) => userActivityTable[b.address].timestamp - userActivityTable[a.address].timestamp);
+
+  return sortedActiveUsers.slice(0, USER_LIMIT);
 }

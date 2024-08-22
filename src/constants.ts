@@ -24,6 +24,7 @@ export const ETH_ADDRESS_LENGTH = 42;
 // These are used for removing the inactive users from the message fetch loop
 export const REMOVE_INACTIVE_USERS_INTERVAL = 1 * MINUTE;
 export const IDLE_TIME = 1 * MINUTE;                                            // User will be removed from readMessage loop after this time, until rejoin
+export const USER_LIMIT = 20;                                                   // Maximum active users
 
 export const MESSAGE_CHECK_INTERVAL = 300;                                      // User-side message check interval
 export const USER_UPDATE_INTERVAL = 8 * SECOND;                                 // User-side user update interval
