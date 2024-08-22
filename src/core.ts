@@ -532,7 +532,7 @@ async function readMessage(user: UserWithIndex, rawTopic: string) {
 function adjustParamerets(topic: string) {
   // Adjust max parallel request count, based on avg request time, which indicates, how much the node is overloaded
   if (reqTimeAvg.getAverage() > DECREASE_LIMIT) messagesQueue.decreaseMax();
-  if (reqTimeAvg.getAverage() < INCREASE_LIMIT) messagesQueue.increaseMax(users.length * 4);  // *4 is just for simulation purposes, it should be exactly users.length
+  if (reqTimeAvg.getAverage() < INCREASE_LIMIT) messagesQueue.increaseMax(users.length * 1);
 
   // Adjust message fetch interval
   if (reqTimeAvg.getAverage() > FETCH_INTERVAL_INCREASE_LIMIT) {
