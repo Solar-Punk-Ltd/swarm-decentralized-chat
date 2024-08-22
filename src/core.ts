@@ -235,7 +235,7 @@ export async function registerUser(topic: string, { participant, key, stamp, nic
       throw new Error('User object validation failed');
     }
 
-    await setUsers([...users, { ...newUser, index: -1 }]);
+    //await setUsers([...users, { ...newUser, index: -1 }]);
 
     const uploadObject: UsersFeedCommit = {
       users: [newUser],

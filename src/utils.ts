@@ -244,10 +244,10 @@ export class RunningAverage {
 
 // selectUsersFeedCommitWriter will select a user who will write a UsersFeedCommit object to the feed
 export function selectUsersFeedCommitWriter(activeUsers: UserWithIndex[], emitStateEvent: any): EthAddress {
-  const minUsersToSelect = 3;
+  const minUsersToSelect = 1;
   const numUsersToselect = Math.max(Math.ceil(activeUsers.length * 0.3), minUsersToSelect);     // Select top 30% of activeUsers, but minimum 1
-  //const sortedActiveUsers = activeUsers.sort((a, b) => b.timestamp - a.timestamp);              // Sort activeUsers by timestamp
-  const mostActiveUsers = activeUsers.slice(0, numUsersToselect);                         // Top 30% but minimum 3 (minUsersToSelect)
+  //const sortedActiveUsers = activeUsers.sort((a, b) => b.timestamp - a.timestamp);            // Sort activeUsers by timestamp
+  const mostActiveUsers = activeUsers.slice(0, numUsersToselect);                               // Top 30% but minimum 3 (minUsersToSelect)
 
 console.log("Most active users: ", mostActiveUsers);
   const sortedMostActiveAddresses = mostActiveUsers.map((user) => user.address).sort();
