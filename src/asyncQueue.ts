@@ -1,3 +1,4 @@
+import pino from "pino";
 import { FIRST_SEGMENT_INDEX } from "./constants";
 import { incrementHexString, sleep } from "./utils";
 
@@ -22,7 +23,7 @@ export class AsyncQueue {
   }
 
   // Executes promises from the AsyncQueue, will execute maxParallel count parallel requests
-  private async processQueue() {
+  private async processQueue(logger: pino.Logger) {
     if (this.inProgressCount >= this.maxParallel) return;
     this.isProcessing = true;
 
@@ -36,7 +37,7 @@ export class AsyncQueue {
           await action();
           this.index = incrementHexString(this.index);
         } catch (error) {
-          console.error('Error processing promise:', error);
+          logger.error('Error processing promise:', error);
         } finally {
           this.inProgressCount = this.inProgressCount-1;
         }
@@ -46,7 +47,7 @@ export class AsyncQueue {
             this.index = incrementHexString(this.index);
           })
           .catch((error) => {
-            console.error('Error processing promise:', error);
+            logger.error('Error processing promise:', error);
           })
           .finally(() => {
             this.inProgressCount = this.inProgressCount-1;
@@ -58,24 +59,24 @@ export class AsyncQueue {
   }
 
   // Enqueue a promise into the AsyncQueue
-  enqueue(promiseFunction: (index?: string) => Promise<any>) {
+  enqueue(promiseFunction: (index?: string) => Promise<any>, logger: pino.Logger) {
     this.queue.push(promiseFunction);
-    this.processQueue();
+    this.processQueue(logger);
   }
 
   // Increase the number of maximum parallel requests
-  increaseMax(limit: number) {
+  increaseMax(limit: number, logger: pino.Logger) {
     if (this.maxParallel+1 <= limit) {
       this.maxParallel++;
     }
-    console.log("Max parallel request set to ", this.maxParallel);
+    logger.info("Max parallel request set to ", this.maxParallel);
   }
 
   // Decrease the number of maximum parallel requests
-  decreaseMax() {
+  decreaseMax(logger: pino.Logger) {
     if (this.maxParallel > 1) {
       this.maxParallel--;
-      console.log("Max parallel request set to ", this.maxParallel);
+      logger.info("Max parallel request set to ", this.maxParallel);
     }
   }
 

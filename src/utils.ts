@@ -1,8 +1,9 @@
 import { ethers, BytesLike, utils, Wallet } from 'ethers';
 import * as crypto from 'crypto';
+import pino from 'pino';
 import { BatchId, Bee, BeeRequestOptions, Signer, UploadResult, Utils } from '@ethersphere/bee-js';
-import { EthAddress, IdleMs, MessageData, Sha3Message, UserActivity, UserWithIndex } from './types';
-import { CONSENSUS_ID, EVENTS, F_STEP, HEX_RADIX, IDLE_TIME, MAX_TIMEOUT, MESSAGE_FETCH_MAX, MESSAGE_FETCH_MIN, USER_LIMIT } from './constants';
+import { ErrorObject, EthAddress, IdleMs, MessageData, Sha3Message, UserActivity, UserWithIndex } from './types';
+import { CONSENSUS_ID, EVENTS, HEX_RADIX } from './constants';
 
 // Generate an ID for the feed, that will be connected to the stream, as Users list
 export function generateUsersFeedId(topic: string) {
@@ -15,7 +16,7 @@ export function generateUserOwnedFeedId(topic: string, userAddress: EthAddress) 
 }
 
 // Validates a User object, including incorrect type, and signature
-export function validateUserObject(user: any): boolean {
+export function validateUserObject(user: any, handleError: (errObject: ErrorObject) => void): boolean {
   try {
     if (typeof user.username !== 'string') throw 'username should be a string';
     if (typeof user.address !== 'string') throw 'address should be a string';
@@ -41,7 +42,12 @@ export function validateUserObject(user: any): boolean {
 
     return true;
   } catch (error) {
-    console.error('This User object is not correct: ', error);
+    handleError({
+      error: error as unknown as Error,
+      context: 'This User object is not correct',
+      throw: false
+    });
+
     return false;
   }
 }
@@ -119,20 +125,21 @@ export async function retryAwaitableAsync<T>(
   fn: () => Promise<T>,
   retries: number = 3,
   delay: number = 250,
+  logger: pino.Logger
 ): Promise<T> {
   return new Promise((resolve, reject) => {
     fn()
       .then(resolve)
       .catch((error) => {
         if (retries > 0) {
-          console.log(`Retrying... Attempts left: ${retries}. Error: ${error.message}`);
+          logger.info(`Retrying... Attempts left: ${retries}. Error: ${error.message}`);
           setTimeout(() => {
-            retryAwaitableAsync(fn, retries - 1, delay)
+            retryAwaitableAsync(fn, retries - 1, delay, logger)
               .then(resolve)
               .catch(reject);
           }, delay);
         } else {
-          console.error(`Failed after ${retries} initial attempts. Last error: ${error.message}`);
+          logger.error(`Failed after ${retries} initial attempts. Last error: ${error.message}`);
           reject(error);
         }
       });
@@ -140,12 +147,21 @@ export async function retryAwaitableAsync<T>(
 }
 
 // Uploads a js object to Swarm, a valid stamp needs to be provided
-export async function uploadObjectToBee(bee: Bee, jsObject: object, stamp: BatchId): Promise<UploadResult | null> {
+export async function uploadObjectToBee(
+  bee: Bee, 
+  jsObject: object, 
+  stamp: BatchId, 
+  handleError: (errObject: ErrorObject) => void
+): Promise<UploadResult | null> {
   try {
     const result = await bee.uploadData(stamp as any, serializeGraffitiRecord(jsObject), { redundancyLevel: 4 });
     return result;
   } catch (error) {
-    console.error(`There was an error while trying to upload object to Swarm: ${error}`);
+    handleError({
+      error: error as unknown as Error,
+      context: `uploadObjectToBee`,
+      throw: false
+    });
     return null;
   }
 }
@@ -188,7 +204,6 @@ export async function getLatestFeedIndex(bee: Bee, topic: string, address: EthAd
   try {
     const feedReader = bee.makeFeedReader('sequence', topic, address);
     const feedEntry = await feedReader.download();
-  console.log("feedEntry (getLatestFeedIndex): ", feedEntry)
     const latestIndex = parseInt(feedEntry.feedIndex.toString(), HEX_RADIX);
     const nextIndex = parseInt(feedEntry.feedIndexNext, HEX_RADIX);
 
@@ -220,7 +235,7 @@ export class RunningAverage {
     this.sum = 0;
   }
 
-  addValue(newValue: number) {
+  addValue(newValue: number, logger: pino.Logger) {
     if (this.values.length === this.maxSize) {
       const removedValue = this.values.shift();
       if (removedValue !== undefined) {
@@ -231,7 +246,7 @@ export class RunningAverage {
     this.values.push(newValue);
     this.sum += newValue;
 
-    console.log("Current average: ", this.getAverage())
+    logger.info(`Current average:  ${this.getAverage()}`);
   }
 
   getAverage() {
@@ -243,13 +258,12 @@ export class RunningAverage {
 }
 
 // selectUsersFeedCommitWriter will select a user who will write a UsersFeedCommit object to the feed
-export function selectUsersFeedCommitWriter(activeUsers: UserWithIndex[], emitStateEvent: any): EthAddress {
+export function selectUsersFeedCommitWriter(activeUsers: UserWithIndex[], emitStateEvent: any, logger: pino.Logger): EthAddress {
   const minUsersToSelect = 1;
   const numUsersToselect = Math.max(Math.ceil(activeUsers.length * 0.3), minUsersToSelect);     // Select top 30% of activeUsers, but minimum 1
-  //const sortedActiveUsers = activeUsers.sort((a, b) => b.timestamp - a.timestamp);            // Sort activeUsers by timestamp
   const mostActiveUsers = activeUsers.slice(0, numUsersToselect);                               // Top 30% but minimum 3 (minUsersToSelect)
 
-console.log("Most active users: ", mostActiveUsers);
+  logger.debug(`Most active users:  ${mostActiveUsers}`);
   const sortedMostActiveAddresses = mostActiveUsers.map((user) => user.address).sort();
   const seedString = sortedMostActiveAddresses.join(',');                                       // All running instances should have the same string at this time
   const hash = crypto.createHash('sha256').update(seedString).digest('hex');                    // Hash should be same in all computers that are in this chat
@@ -260,7 +274,7 @@ console.log("Most active users: ", mostActiveUsers);
 }
 
 // Gives back the currently active users, based on idle time and user count limit calculation
-export function getActiveUsers(users: UserWithIndex[], userActivityTable: UserActivity): UserWithIndex[] {
+export function getActiveUsers(users: UserWithIndex[], userActivityTable: UserActivity, idleTime: number, limit: number, logger: pino.Logger): UserWithIndex[] {
   const idleMs: IdleMs = {};
   const now = Date.now();
 
@@ -269,7 +283,7 @@ export function getActiveUsers(users: UserWithIndex[], userActivityTable: UserAc
     idleMs[key] = now - userActivityTable[key].timestamp;
   }
 
-console.log("Users inside removeIdle: ", users)
+  logger.debug(`Users inside removeIdle:  ${users}`)
   const activeUsers = users.filter((user) => {
     const userAddr = user.address;
     if (!userActivityTable[userAddr]) {
@@ -281,11 +295,11 @@ console.log("Users inside removeIdle: ", users)
     }
           
     
-    return idleMs[userAddr] < IDLE_TIME;
+    return idleMs[userAddr] < idleTime;
   });
 
   // Sort activeUsers by their last activity timestamp (most recent first)
   const sortedActiveUsers = activeUsers.sort((a, b) => userActivityTable[b.address].timestamp - userActivityTable[a.address].timestamp);
 
-  return sortedActiveUsers.slice(0, USER_LIMIT);
+  return sortedActiveUsers.slice(0, limit);
 }

@@ -1,5 +1,7 @@
 import { BatchId, Bee, Reference } from '@ethersphere/bee-js';
 import { ethers, Signature } from 'ethers';
+import pino from 'pino';
+import pinoPretty from 'pino-pretty';
 
 import { 
   generateGraffitiFeedMetadata,
@@ -33,13 +35,16 @@ import {
 
 import { EVENTS, HEX_RADIX, MINUTE, SECOND } from './constants';
 
+/**
+ * Swarm Decentralized Chat
+ */
 export class SwarmChat {
+  /** Variables that will be constant for this SwarmChat instance */
   private USERS_FEED_TIMEOUT: number;                                       // Timeout when writing UsersFeedCommit
   private REMOVE_INACTIVE_USERS_INTERVAL = 1 * MINUTE;
   private IDLE_TIME = 1 * MINUTE;                                           // User will be removed from readMessage loop after this time, until rejoin
   private USER_LIMIT = 20;                                                  // Maximum active users
 
-  private MESSAGE_CHECK_INTERVAL = 300;                                     // User-side message check interval
   private USER_UPDATE_INTERVAL = 8 * SECOND;                                // User-side user update interval
 
   private MAX_TIMEOUT = 1200;                                               // Max timeout in ms
@@ -52,6 +57,7 @@ export class SwarmChat {
   private MESSAGE_FETCH_MAX = 8 * SECOND;                                   // Highest message fetch frequency (ms)
   private F_STEP = 100;                                                     // Message fetch step (ms)
 
+  /** Actual variables, like Bee instance, messages, analytics, user list, etc */
   private bee = new Bee('http://localhost:1633');
   private emitter = new EventEmitter();
   private messages: MessageData[] = [];
@@ -63,15 +69,20 @@ export class SwarmChat {
   private usersFeedIndex: number = 0;                                       // Will be overwritten on user-side, by initUsers
   private ownIndex: number = -2;
   private removeIdleUsersInterval: NodeJS.Timeout | null = null;            // Streamer-side interval, for idle user removing
-  private userFetchInterval: NodeJS.Timeout | null = null;                  // User-side interval, for user fetching
-  private messageFetchInterval: NodeJS.Timeout | null = null;               // User-side interval, for message fetching
+  private userFetchInterval: NodeJS.Timeout | null = null;                  // User-side interval, for user fetching (object created by setInterval)
+  private messageFetchInterval: NodeJS.Timeout | null = null;               // User-side interval, for message fetching (object created by setInterval)
   private mInterval: number = this.MESSAGE_FETCH_MIN * 3;                   // We initialize message fetch interval to higher than min, we don't know network conditions yet
   private messagesIndex = 0;
   private removeIdleIsRunning = false;                                      // Avoid race conditions
   private userActivityTable: UserActivity = {};                             // Used to remove inactive users
   private newlyResigeredUsers: UserWithIndex[] = [];                        // keep track of fresh users
   private reqCount = 0;                                                     // Diagnostics only
-  
+  private prettyStream = pinoPretty({                                       // Colorizing capability for logger
+    colorize: true,
+    translateTime: 'SYS:standard',
+    ignore: "pid,hostname"
+  });
+  private logger = pino(this.prettyStream);                                 // Logger. Levels: "fatal" | "error" | "warn" | "info" | "debug" | "trace" | "silent"
   
   
   private eventStates: Record<string, boolean> = {                          // Which operation is in progress, if any
@@ -80,6 +91,7 @@ export class SwarmChat {
     loadingRegistration: false,
   };
 
+  // Constructor, static variables will get value here
   constructor(settings: ChatSettings = {}, beeInstance?: Bee, eventEmitter?: EventEmitter) {
     this.bee = this.bee = beeInstance || new Bee(settings.url || 'http://localhost:1633');
     this.emitter = eventEmitter || new EventEmitter();
@@ -89,7 +101,6 @@ export class SwarmChat {
     this.IDLE_TIME = settings.idleTime || 1 * MINUTE;                                       // Can adjust idle time, after that, usser is inactive (messages not polled)
     this.USER_LIMIT = settings.userLimit || 20;                                             // Overwrites IDLE_TIME, maximum active users
 
-    this.MESSAGE_CHECK_INTERVAL = settings.messageCheckInterval || 300;                     // Start value of message check interval
     this.USER_UPDATE_INTERVAL = settings.userUpdateInterval || 8 * SECOND;                  // Burnt-in value of user update interval (will not change)
 
     this.MAX_TIMEOUT = settings.maxTimeout || 1200;                                         // Max timeout for read message, if too low, won't be able to read messages. Higher values will slow down the chat
@@ -102,7 +113,7 @@ export class SwarmChat {
     this.MESSAGE_FETCH_MAX = settings.messageFetchMax || 8 * SECOND;                        // Highest possible value for message fetch interval
     this.F_STEP = settings.fStep || 100;                                                    // When interval is changed, it is changed by this value
     
-
+    this.logger = pino({ level: settings.logLevel || "warn" }, this.prettyStream);          // Logger can be set to "fatal" | "error" | "warn" | "info" | "debug" | "trace" | "silent"
   }
 
   // Should be used on front end, to be able to start chat, listen to events
@@ -184,7 +195,7 @@ export class SwarmChat {
         const feedEntry = await feedReader.download({ index: i});
         const data = await this.bee.downloadData(feedEntry.reference);
         const objectFromFeed = data.json() as unknown as UsersFeedCommit;
-        const validUsers = objectFromFeed.users.filter((user) => validateUserObject(user));
+        const validUsers = objectFromFeed.users.filter((user) => validateUserObject(user, this.handleError));
         if (objectFromFeed.overwrite) {                             // They will have index that was already written to the object by Activity Analysis writer
           const usersBatch: UserWithIndex[] = validUsers as unknown as UserWithIndex[];
           aggregatedList = [...aggregatedList, ...usersBatch];
@@ -245,7 +256,7 @@ export class SwarmChat {
       const alreadyRegistered = this.users.find((user) => user.address === participant);
 
       if (alreadyRegistered) {
-        console.log('User already registered');
+        this.logger.info('User already registered');
         return;
       }
 
@@ -261,7 +272,7 @@ export class SwarmChat {
         signature,
       };
 
-      if (!validateUserObject(newUser)) {
+      if (!validateUserObject(newUser, this.handleError)) {
         throw new Error('User object validation failed');
       }
 
@@ -270,7 +281,7 @@ export class SwarmChat {
         overwrite: false
       }
 
-      const userRef = await uploadObjectToBee(this.bee, uploadObject, stamp as any);
+      const userRef = await uploadObjectToBee(this.bee, uploadObject, stamp as any, this.handleError);
       if (!userRef) throw new Error('Could not upload user to bee');
 
       const feedWriter = graffitiFeedWriterFromTopic(this.bee, topic);
@@ -296,7 +307,7 @@ export class SwarmChat {
   // Every User is doing Activity Analysis, and one of them is selected to write the UsersFeed
   private async startActivityAnalyzes(topic: string, ownAddress: EthAddress, stamp: BatchId) {
     try {
-      console.info("Starting Activity Analysis...");
+      this.logger.info("Starting Activity Analysis...");
       this.removeIdleUsersInterval = setInterval(() => this.removeIdleUsers(topic, ownAddress, stamp), this.REMOVE_INACTIVE_USERS_INTERVAL);
 
     } catch (error) {
@@ -314,7 +325,7 @@ export class SwarmChat {
       
       for (let i = 0; i < this.newlyResigeredUsers.length; i++) {
         const address = this.newlyResigeredUsers[i].address;
-        console.info(`New user registered. Inserting ${this.newlyResigeredUsers[i].timestamp} to ${address}`);
+        this.logger.info(`New user registered. Inserting ${this.newlyResigeredUsers[i].timestamp} to ${address}`);
         if (this.userActivityTable[address])                                    // Update entry
           this.userActivityTable[address].timestamp = this.newlyResigeredUsers[i].timestamp;
         else                                                                    // Create new entry
@@ -324,7 +335,7 @@ export class SwarmChat {
           }
       }
 
-      console.log("User Activity Table: ", this.userActivityTable);
+      this.logger.trace(`User Activity Table:  ${this.userActivityTable}`);
 
     } catch (error) {
       this.handleError({
@@ -338,14 +349,14 @@ export class SwarmChat {
   // Used for Activity Analysis, saves last message timestamp into activity table
   private async updateUserActivityAtNewMessage(theNewMessage: MessageData) {
     try {
-      console.log("New message (updateUserActivityAtNewMessage): ", theNewMessage)
+      this.logger.trace(`New message (updateUserActivityAtNewMessage):  ${theNewMessage}`);
 
       this.userActivityTable[theNewMessage.address] = {
         timestamp: theNewMessage.timestamp,
         readFails: 0
       }
 
-      console.log("User Activity Table (new message received): ", this.userActivityTable);
+      this.logger.trace(`User Activity Table (new message received):  ${this.userActivityTable}`);
 
     } catch (error) {
       this.handleError({
@@ -360,26 +371,26 @@ export class SwarmChat {
   // This selection is pseudo-random, and it should select the same user in every app instance
   private async removeIdleUsers(topic: string, ownAddress: EthAddress, stamp: BatchId) {
     try {
-      console.log(`UserActivity table inside removeIdleUsers: `, this.userActivityTable);
+      this.logger.debug(`UserActivity table inside removeIdleUsers:  ${this.userActivityTable}`);
       if (this.removeIdleIsRunning) {
-        console.warn("Previous removeIdleUsers is still running");
+        this.logger.warn("Previous removeIdleUsers is still running");
         //TODO debug this
         // we could do some statistics about how slow is this node, so it will select it with less chance
         return;
       }
       this.removeIdleIsRunning = true;
       
-      const activeUsers = getActiveUsers(this.users, this.userActivityTable);
+      const activeUsers = getActiveUsers(this.users, this.userActivityTable, this.IDLE_TIME, this.USER_LIMIT, this.logger);
 
       if (activeUsers.length === 0) {
-        console.info("There are no active users, Activity Analysis will continue when a user registers.");
+        this.logger.info("There are no active users, Activity Analysis will continue when a user registers.");
         await this.writeUsersFeedCommit(topic, stamp, activeUsers);
         if (this.removeIdleUsersInterval) clearInterval(this.removeIdleUsersInterval);
         this.removeIdleIsRunning = false;
         return;
       }
 
-      const selectedUser = selectUsersFeedCommitWriter(activeUsers, this.emitStateEvent);
+      const selectedUser = selectUsersFeedCommitWriter(activeUsers, this.emitStateEvent, this.logger);
 
       if (selectedUser === ownAddress) {
         await this.writeUsersFeedCommit(topic, stamp, activeUsers);
@@ -400,18 +411,18 @@ export class SwarmChat {
   // Write a UsersFeedCommit to the Users feed, which might remove some inactive users from the readMessagesForAll loop
   private async writeUsersFeedCommit(topic: string, stamp: BatchId, activeUsers: UserWithIndex[]) {
     try {
-      console.info("The user was selected for submitting the UsersFeedCommit! (removeIdleUsers)");
+      this.logger.info("The user was selected for submitting the UsersFeedCommit! (removeIdleUsers)");
       const uploadObject: UsersFeedCommit = {
         users: activeUsers as UserWithIndex[],
         overwrite: true
       }
-      const userRef = await uploadObjectToBee(this.bee, uploadObject, stamp as any);
+      const userRef = await uploadObjectToBee(this.bee, uploadObject, stamp as any, this.handleError);
       if (!userRef) throw new Error('Could not upload user list to bee');
 
       const feedWriter = graffitiFeedWriterFromTopic(this.bee, topic, { timeout: this.USERS_FEED_TIMEOUT });
 
       await feedWriter.upload(stamp, userRef.reference);
-      console.log("Upload was successful!")    
+      this.logger.debug("Upload was successful!")    
 
     } catch (error) {
       this.handleError({
@@ -424,7 +435,10 @@ export class SwarmChat {
 
   // Adds a getNewUsers to the usersQueue, which will fetch new users
   private enqueueUserFetch(topic: string) {
-    return () => this.usersQueue.enqueue((index) => this.getNewUsers(topic));
+    return () => this.usersQueue.enqueue(
+      (index) => this.getNewUsers(topic), 
+      this.logger
+    );
   }
 
   // Reads the Users feed, and changes the users object, accordingly
@@ -437,9 +451,9 @@ export class SwarmChat {
     
       const data = await this.bee.downloadData(feedEntry.reference);
       const objectFromFeed = data.json() as unknown as UsersFeedCommit;
-      console.log("New UsersFeedCommit received! ", objectFromFeed)
+      this.logger.debug(`New UsersFeedCommit received!  ${objectFromFeed}`)
     
-      const validUsers = objectFromFeed.users.filter((user) => validateUserObject(user));
+      const validUsers = objectFromFeed.users.filter((user) => validateUserObject(user, this.handleError));
 
       let newUsers: UserWithIndex[] = [];
       if (!objectFromFeed.overwrite) {
@@ -470,8 +484,8 @@ export class SwarmChat {
     } catch (error) {
       if (error instanceof Error) {
         if (error.message.includes("timeout")) {
-          console.info(`Timeout exceeded.`);
-          this.reqTimeAvg.addValue(this.MAX_TIMEOUT);
+          this.logger.info(`Timeout exceeded.`);
+          this.reqTimeAvg.addValue(this.MAX_TIMEOUT, this.logger);
         } else {
           if (!isNotFoundError(error)) {
             this.handleError({
@@ -495,9 +509,8 @@ export class SwarmChat {
 
       for (const user of this.users) {
         this.reqCount++;
-        //TODO remove
-        console.info(`Request enqueued. Total request count: ${this.reqCount}`);
-        this.messagesQueue.enqueue(() => this.readMessage(user, topic));
+        this.logger.trace(`Request enqueued. Total request count: ${this.reqCount}`);
+        this.messagesQueue.enqueue(() => this.readMessage(user, topic), this.logger);
       }
     };
   }
@@ -510,7 +523,7 @@ export class SwarmChat {
     
       let currIndex = user.index;
       if (user.index === -1) {
-        console.warn("WARNING! No index found!")
+        this.logger.info("No index found! (user.index in readMessage)");
         const { latestIndex, nextIndex } = await getLatestFeedIndex(this.bee, topic, user.address);
         currIndex = latestIndex === -1 ? nextIndex : latestIndex;
       }
@@ -522,7 +535,7 @@ export class SwarmChat {
       const start = Date.now();
       const recordPointer = await feedReader.download({ index: currIndex });
       const end = Date.now();
-      this.reqTimeAvg.addValue(end-start);
+      this.reqTimeAvg.addValue(end-start, this.logger);
       
 
       // We download the actual message data
@@ -552,11 +565,11 @@ export class SwarmChat {
     } catch (error) {
       if (error instanceof Error) {
         if (error.message.includes("timeout")) {
-          console.info(`Timeout of ${this.MAX_TIMEOUT} exceeded for readMessage.`);
+          //TODO decide between 'warn' and 'info'
+          this.logger.info(`Timeout of ${this.MAX_TIMEOUT} exceeded for readMessage.`);
         } else {
           if (!isNotFoundError(error)) {
             if (this.userActivityTable[user.address]) this.userActivityTable[user.address].readFails++;                  // We increment read fail count
-            console.error(error);
             this.handleError({
               error: error as unknown as Error,
               context: `readMessage`,
@@ -572,8 +585,8 @@ export class SwarmChat {
   //TODO this might be an utils function, but we need to pass a lot of paramerers, and in the other direction as well (return)
   private adjustParamerets(topic: string) {
     // Adjust max parallel request count, based on avg request time, which indicates, how much the node is overloaded
-    if (this.reqTimeAvg.getAverage() > this.DECREASE_LIMIT) this.messagesQueue.decreaseMax();
-    if (this.reqTimeAvg.getAverage() < this.INCREASE_LIMIT) this.messagesQueue.increaseMax(this.users.length * 1);
+    if (this.reqTimeAvg.getAverage() > this.DECREASE_LIMIT) this.messagesQueue.decreaseMax(this.logger);
+    if (this.reqTimeAvg.getAverage() < this.INCREASE_LIMIT) this.messagesQueue.increaseMax(this.users.length * 1, this.logger);
 
     // Adjust message fetch interval
     if (this.reqTimeAvg.getAverage() > this.FETCH_INTERVAL_INCREASE_LIMIT) {
@@ -581,7 +594,7 @@ export class SwarmChat {
         this.mInterval = this.mInterval + this.F_STEP;
         if (this.messageFetchInterval) clearInterval(this.messageFetchInterval);
         this.messageFetchInterval = setInterval(this.readMessagesForAll(topic), this.mInterval);
-        console.info(`Increased message fetch interval to ${this.mInterval} ms`);
+        this.logger.info(`Increased message fetch interval to ${this.mInterval} ms`);
       }
     }
     if (this.reqTimeAvg.getAverage() < this.FETCH_INTERVAL_DECREASE_LIMIT) {
@@ -589,7 +602,7 @@ export class SwarmChat {
         this.mInterval = this.mInterval - this.F_STEP;
         if (this.messageFetchInterval) clearInterval(this.messageFetchInterval);
         this.messageFetchInterval = setInterval(this.readMessagesForAll(topic), this.mInterval);
-        console.info(`Decreased message fetch interval to ${this.mInterval-this.F_STEP} ms`);
+        this.logger.info(`Decreased message fetch interval to ${this.mInterval-this.F_STEP} ms`);
       }
     }
   }
@@ -613,8 +626,7 @@ export class SwarmChat {
         this.ownIndex = nextIndex;
       }
 
-      const msgData = await uploadObjectToBee(this.bee, messageObj, stamp);
-      console.log('msgData', msgData);
+      const msgData = await uploadObjectToBee(this.bee, messageObj, stamp, this.handleError);
       if (!msgData) throw 'Could not upload message data to bee';
 
       const feedWriter = this.bee.makeFeedWriter('sequence', feedTopicHex, privateKey);
@@ -640,7 +652,7 @@ export class SwarmChat {
       this.usersLoading = true;
       this.users = newUsers;
       this.usersLoading = false;
-    });
+    }, undefined, undefined, this.logger);
   }
 
   // Emit event about state change
@@ -656,15 +668,33 @@ export class SwarmChat {
   }
 
   private handleError(errObject: ErrorObject) {
-    console.error(`Error in ${errObject.context}:`, errObject.error.message);
-    this.emitter.emit('error', errObject);
+    this.logger.error(`Error in ${errObject.context}: ${errObject.error.message}`);
+    this.emitter.emit(EVENTS.ERROR, errObject);
     if (errObject.throw) {
       throw new Error(` Error in ${errObject.context}`);
     }
   }
 
+  public changeLogLevel(newLogLevel: string) {
+    const possibleLevels = ["fatal", "error", "warn", "info", "debug", "trace", "silent"];
+
+    if (!possibleLevels.includes(newLogLevel)) {
+      this.handleError({
+        error: new Error("The provided log level does not exist"),
+        context: 'changeLogLevel',
+        throw: false
+      });
+      return;
+    }
+
+    this.logger = pino({ level: newLogLevel})
+  }
 }
 
 
 
 const x = new SwarmChat()
+const { on } = x.getChatActions()
+on(EVENTS.ERROR, (error) => {
+
+})

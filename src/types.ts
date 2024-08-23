@@ -80,7 +80,7 @@ export interface ChatSettings {
     messageFetchMin?: number;                   // ms
     messageFetchMax?: number;                   // ms
     fStep?: number;                             // ms, messageFetch limit steps
-
+    logLevel?: string                           // "fatal" | "error" | "warn" | "info" | "debug" | "trace" | "silent"
 }
 
 // Error object that we send in catch blocks

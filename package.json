@@ -4,25 +4,28 @@
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
     "exports": {
-      ".": {
-        "import": "./dist/index.js",
-        "require": "./dist/index.cjs"
-      },
-      "./*": "./dist/*"
+        ".": {
+            "import": "./dist/index.js",
+            "require": "./dist/index.cjs"
+        },
+        "./*": "./dist/*"
     },
     "files": [
-      "dist",
-      "README.md"
+        "dist",
+        "README.md"
     ],
     "scripts": {
         "build": "tsc"
     },
     "dependencies": {
         "@ethersphere/bee-js": "^6.9.1",
-        "ethers": "^5.7.2"
+        "ethers": "^5.7.2",
+        "pino": "^9.3.2",
+        "pino-pretty": "^11.2.2"
     },
     "devDependencies": {
         "@types/lodash": "^4.17.7",
+        "@types/pino": "^7.0.5",
         "typescript": "^4.0.0"
     }
 }
