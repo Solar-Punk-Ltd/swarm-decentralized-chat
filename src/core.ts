@@ -108,18 +108,25 @@ export class SwarmChat {
     this.reqTimeAvg = new RunningAverage(1000, this.logger);
   }
 
-  // Should be used on front end, to be able to start chat, listen to events
-  getChatActions() {
+  /** With getChatActions, it's possible to listen to events on front end or anywhere outside the library. 
+   *  The list of events are in the constants file, under EVENTS. 
+   *  Example setup: 
+   *  ```typescript
+   *  const { on } = chat.getChatActions();
+   *  on(EVENTS.RECEIVE_MESSAGE, async (newMessages: MessageData[]) => {
+   *    // do something with the message
+   *  });
+   *  ``` */
+  public getChatActions() {
     return {
-      startFetchingForNewUsers: this.enqueueUserFetch,
-      startLoadingNewMessages: this.readMessagesForAll,
+      startFetchingForNewUsers: this.enqueueUserFetch,      // i think these are obsolate
+      startLoadingNewMessages: this.readMessagesForAll,     // this as well
       on: this.emitter.on,
       off: this.emitter.off,
     };
   }
 
-  // Creates the Users feed, which is necesarry for user registration, and to handle idle users
-  // Should be called from outside the library, for example React
+  /** Creates the Users feed, which is necesarry for user registration, and to handle idle users. This will create a new chat room. */
   public async initChatRoom(topic: string, stamp: BatchId) {
     try {
       const { consensusHash, graffitiSigner } = this.utils.generateGraffitiFeedMetadata(topic);
@@ -134,8 +141,8 @@ export class SwarmChat {
     }
   }
 
-  // startUserFetchProcess will periodically read the Users feed
-  // Should be called from outside the library, for example React
+  /** The SwarmChat instance will start reading UsersFeedCommit messages, so it will hear about registrations, and users becoming inactive. 
+   * This way it will know who are the actie users of the chat. */
   public startUserFetchProcess(topic: string) {
     if (this.userFetchInterval) {
       clearInterval(this.userFetchInterval);
@@ -143,8 +150,7 @@ export class SwarmChat {
     this.userFetchInterval = setInterval(this.enqueueUserFetch(topic), this.USER_UPDATE_INTERVAL);
   }
 
-  // stopUserFetchProcess clears the interval, that periodically reads the Users feed
-  // Should be called from outside the library, for example React
+  /** The SwarmChat instance will stop reading UsersFeedCommit messages, so won't know who are the currently active users. */
   public stopUserFetchProcess() {
     if (this.userFetchInterval) {
       clearInterval(this.userFetchInterval);
@@ -152,8 +158,7 @@ export class SwarmChat {
     }
   }
 
-  // startMessageFetchProcess will periodically read next message, for all active users
-  // Should be called from outside the library, for example React
+  /** The SwarmChat instance will start polling for messages for the active users. It will poll users' feeds in a loop. */
   public startMessageFetchProcess(topic: string) {
     if (this.messageFetchInterval) {
       clearInterval(this.messageFetchInterval);
@@ -161,8 +166,7 @@ export class SwarmChat {
     this.messageFetchInterval = setInterval(this.readMessagesForAll(topic), this.mInterval);
   }
 
-  // clears the interval, that periodically reads messages for all active users
-  // Should be called from outside the library, for example React
+  /** The SwarmChat instance will stop polling for new messages on users' own feeds. */
   public stopMessageFetchProcess() {
     if (this.messageFetchInterval) {
       clearInterval(this.messageFetchInterval);
@@ -170,8 +174,7 @@ export class SwarmChat {
     }
   }
 
-  // Initializes the users object, when starting the application
-  // Should be called from outside the library, for example React
+  /** Initializes the users object, when starting the application. Will try to figure out currently active users. */
   public async initUsers(topic: string, ownAddress: EthAddress, stamp: BatchId) {
     try {
       this.emitStateEvent(EVENTS.LOADING_INIT_USERS, true);
@@ -221,8 +224,7 @@ export class SwarmChat {
     }
   }
 
-  // Checks if a given Ethereum address is registered or not
-  // Should be called from outside the library, for example React
+  /** Checks if a given Ethereum address is registered or not (registered means active, others will read it's messages) */
   public isRegistered(userAddress: EthAddress): boolean {
     const findResult = this.users.findIndex((user) => user.address === userAddress);
 
@@ -230,8 +232,7 @@ export class SwarmChat {
     else return true;
   }
 
-  // Registers the user for chat, will create a UsersFeedCommit object, and will write it to the Users feed
-  // Should be called from outside the library, for example React
+  /** Registers the user for chat, will create a UsersFeedCommit object, and will write it to the Users feed. Also used for reconnect. */
   public async registerUser(topic: string, { participant, key, stamp, nickName: username }: ParticipantDetails) {
     try {
       this.emitStateEvent(EVENTS.LOADING_REGISTRATION, true);
@@ -296,7 +297,7 @@ export class SwarmChat {
     }
   }
 
-  // We can't access SwarmChatUtils.orderMessages directly, from the outside.
+  /** Will give back timestamp-ordered messages */
   public orderMessages(messages: MessageData[]) {
     return this.utils.orderMessages(messages);
   }
@@ -522,7 +523,7 @@ export class SwarmChat {
         currIndex = latestIndex === -1 ? nextIndex : latestIndex;
       }
     
-      this.adjustParamerets(rawTopic)
+      this.adjustParamerets(rawTopic);
 
       // We measure the request time with the first Bee API request, with the second request, we do not do this, because it is very similar
       const feedReader = this.bee.makeFeedReader('sequence', topic, user.address, { timeout: this.MAX_TIMEOUT });
@@ -530,13 +531,11 @@ export class SwarmChat {
       const recordPointer = await feedReader.download({ index: currIndex });
       const end = Date.now();
       this.reqTimeAvg.addValue(end-start);
-      
 
       // We download the actual message data
       const data = await this.bee.downloadData(recordPointer.reference);
       const messageData = JSON.parse(new TextDecoder().decode(data)) as MessageData;
     
-      //const newUsers = users.map((u) => (u.address === user.address ? { ...u, index: currIndex + 1 } : u));
       const uIndex = this.users.findIndex((u) => (u.address === user.address));
       const newUsers = this.users;
       if (newUsers[uIndex]) newUsers[uIndex].index = currIndex + 1;         // If this User was dropped, we won't increment it's index, but Streamer will
@@ -601,7 +600,7 @@ export class SwarmChat {
     }
   }
 
-  // Sends a message to the user's own feed
+  /** Sends a message to the user's own feed. Topic is room topic. */
   public async sendMessage(
     address: EthAddress,
     topic: string,
@@ -657,12 +656,12 @@ export class SwarmChat {
     }
   }
 
-  // Get user count
+  /** Returns the user count, these users are being polled */
   public getUserCount() {
     return this.users.length;
   }
 
-  // Get the IDLE_TIME const
+  /** Returns the IDLE_TIME constant, after this, user will be considered inactive */
   public getIdleConst() {
     return this.IDLE_TIME;
   }
