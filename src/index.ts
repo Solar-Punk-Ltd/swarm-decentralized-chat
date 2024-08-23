@@ -2,12 +2,7 @@
 export { SwarmChat } from './core';
 
 // Constants
-export { 
-    EVENTS,
-    IDLE_TIME,
-    MESSAGE_CHECK_INTERVAL,
-    USER_UPDATE_INTERVAL
-} from './constants';
+export {  EVENTS } from './constants';
 
 // Types
 export type { 

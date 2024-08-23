@@ -660,8 +660,24 @@ export class SwarmChat {
     }
   }
 
+  // Get user count
   public getUserCount() {
     return this.users.length;
+  }
+
+  // Get the IDLE_TIME const
+  public getIdleConst() {
+    return this.IDLE_TIME;
+  }
+
+  // Get the current message check interval
+  public getMessageCheckInterval() {
+    return this.messageFetchInterval;
+  }
+
+  // Get the USER_UPDATE_INTERVAL const
+  public getUserUpdateIntervalConst() {
+    return this.USER_UPDATE_INTERVAL;
   }
 
   private handleError(errObject: ErrorObject) {
