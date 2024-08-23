@@ -387,7 +387,7 @@ export class SwarmChat {
         return;
       }
 
-      const selectedUser = this.utils.selectUsersFeedCommitWriter(activeUsers, this.emitStateEvent);
+      const selectedUser = this.utils.selectUsersFeedCommitWriter(activeUsers, this.emitStateEvent.bind(this));
 
       if (selectedUser === ownAddress) {
         await this.writeUsersFeedCommit(topic, stamp, activeUsers);
@@ -667,12 +667,12 @@ export class SwarmChat {
     return this.IDLE_TIME;
   }
 
-  // Get the current message check interval
+  /** Returns the current message check interval, which is dynamic */
   public getMessageCheckInterval() {
     return this.messageFetchInterval;
   }
 
-  // Get the USER_UPDATE_INTERVAL const
+  /** Returns the USER_UPDATE_INTERVAL constant, that can be set when creating a new SwarmChat instance */
   public getUserUpdateIntervalConst() {
     return this.USER_UPDATE_INTERVAL;
   }
@@ -685,6 +685,10 @@ export class SwarmChat {
     }
   }
 
+  /**
+   * Change the log level for this SwarmChat instance
+   * @param newLogLevel Possible values: "fatal" | "error" | "warn" | "info" | "debug" | "trace" | "silent"
+   */
   public changeLogLevel(newLogLevel: string) {
     const possibleLevels = ["fatal", "error", "warn", "info", "debug", "trace", "silent"];
 

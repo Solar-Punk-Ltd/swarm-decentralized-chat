@@ -235,7 +235,7 @@ export class SwarmChatUtils {
   }
 
   // selectUsersFeedCommitWriter will select a user who will write a UsersFeedCommit object to the feed
-  selectUsersFeedCommitWriter(activeUsers: UserWithIndex[], emitStateEvent: any): EthAddress {
+  selectUsersFeedCommitWriter(activeUsers: UserWithIndex[], emitStateEvent: (event: string, value: any) => void): EthAddress {
     const minUsersToSelect = 1;
     const numUsersToselect = Math.max(Math.ceil(activeUsers.length * 0.3), minUsersToSelect);     // Select top 30% of activeUsers, but minimum 1
     const mostActiveUsers = activeUsers.slice(0, numUsersToselect);                               // Top 30% but minimum 3 (minUsersToSelect)
