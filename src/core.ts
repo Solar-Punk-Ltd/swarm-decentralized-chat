@@ -55,8 +55,8 @@ export class SwarmChat {
   private usersFeedIndex: number = 0;                                       // Will be overwritten on user-side, by initUsers
   private ownIndex: number = -2;
   private removeIdleUsersInterval: NodeJS.Timeout | null = null;            // Streamer-side interval, for idle user removing
-  private userFetchInterval: NodeJS.Timeout | null = null;                  // User-side interval, for user fetching (object created by setInterval)
-  private messageFetchInterval: NodeJS.Timeout | null = null;               // User-side interval, for message fetching (object created by setInterval)
+  private userFetchClock: NodeJS.Timeout | null = null;                     // User-side interval, for user fetching (object created by setInterval)
+  private messageFetchClock: NodeJS.Timeout | null = null;                  // User-side interval, for message fetching (object created by setInterval)
   private mInterval: number = this.MESSAGE_FETCH_MIN * 3;                   // We initialize message fetch interval to higher than min, we don't know network conditions yet
   private messagesIndex = 0;
   private removeIdleIsRunning = false;                                      // Avoid race conditions
@@ -100,7 +100,12 @@ export class SwarmChat {
     this.MESSAGE_FETCH_MAX = settings.messageFetchMax || 8 * SECOND;                        // Highest possible value for message fetch interval
     this.F_STEP = settings.fStep || 100;                                                    // When interval is changed, it is changed by this value
     
-    this.logger = pino({ level: settings.logLevel || "warn" }, this.prettyStream);          // Logger can be set to "fatal" | "error" | "warn" | "info" | "debug" | "trace" | "silent"
+    this.logger = pino({                                                                    // Logger can be set to "fatal" | "error" | "warn" | "info" | "debug" | "trace" | "silent"
+      level: settings.logLevel || "warn",
+      browser: {                                                                            // This is necesarry for browser compatibility
+        asObject: true
+      }
+    }, this.prettyStream);          
 
     this.utils = new SwarmChatUtils(this.handleError.bind(this), this.logger);              // Initialize chat utils
     this.usersQueue = new AsyncQueue({ indexed: false, waitable: true, max: 1 }, this.handleError.bind(this), this.logger);
@@ -144,33 +149,33 @@ export class SwarmChat {
   /** The SwarmChat instance will start reading UsersFeedCommit messages, so it will hear about registrations, and users becoming inactive. 
    * This way it will know who are the actie users of the chat. */
   public startUserFetchProcess(topic: string) {
-    if (this.userFetchInterval) {
-      clearInterval(this.userFetchInterval);
+    if (this.userFetchClock) {
+      clearInterval(this.userFetchClock);
     }
-    this.userFetchInterval = setInterval(this.enqueueUserFetch(topic), this.USER_UPDATE_INTERVAL);
+    this.userFetchClock = setInterval(this.enqueueUserFetch(topic), this.USER_UPDATE_INTERVAL);
   }
 
   /** The SwarmChat instance will stop reading UsersFeedCommit messages, so won't know who are the currently active users. */
   public stopUserFetchProcess() {
-    if (this.userFetchInterval) {
-      clearInterval(this.userFetchInterval);
-      this.userFetchInterval = null;
+    if (this.userFetchClock) {
+      clearInterval(this.userFetchClock);
+      this.userFetchClock = null;
     }
   }
 
   /** The SwarmChat instance will start polling for messages for the active users. It will poll users' feeds in a loop. */
   public startMessageFetchProcess(topic: string) {
-    if (this.messageFetchInterval) {
-      clearInterval(this.messageFetchInterval);
+    if (this.messageFetchClock) {
+      clearInterval(this.messageFetchClock);
     }
-    this.messageFetchInterval = setInterval(this.readMessagesForAll(topic), this.mInterval);
+    this.messageFetchClock = setInterval(this.readMessagesForAll(topic), this.mInterval);
   }
 
   /** The SwarmChat instance will stop polling for new messages on users' own feeds. */
   public stopMessageFetchProcess() {
-    if (this.messageFetchInterval) {
-      clearInterval(this.messageFetchInterval);
-      this.messageFetchInterval = null;
+    if (this.messageFetchClock) {
+      clearInterval(this.messageFetchClock);
+      this.messageFetchClock = null;
     }
   }
 
@@ -585,16 +590,16 @@ export class SwarmChat {
     if (this.reqTimeAvg.getAverage() > this.FETCH_INTERVAL_INCREASE_LIMIT) {
       if (this.mInterval + this.F_STEP <= this.MESSAGE_FETCH_MAX) {
         this.mInterval = this.mInterval + this.F_STEP;
-        if (this.messageFetchInterval) clearInterval(this.messageFetchInterval);
-        this.messageFetchInterval = setInterval(this.readMessagesForAll(topic), this.mInterval);
+        if (this.messageFetchClock) clearInterval(this.messageFetchClock);
+        this.messageFetchClock = setInterval(this.readMessagesForAll(topic), this.mInterval);
         this.logger.info(`Increased message fetch interval to ${this.mInterval} ms`);
       }
     }
     if (this.reqTimeAvg.getAverage() < this.FETCH_INTERVAL_DECREASE_LIMIT) {
       if (this.mInterval - this.F_STEP > this.MESSAGE_FETCH_MIN) {
         this.mInterval = this.mInterval - this.F_STEP;
-        if (this.messageFetchInterval) clearInterval(this.messageFetchInterval);
-        this.messageFetchInterval = setInterval(this.readMessagesForAll(topic), this.mInterval);
+        if (this.messageFetchClock) clearInterval(this.messageFetchClock);
+        this.messageFetchClock = setInterval(this.readMessagesForAll(topic), this.mInterval);
         this.logger.info(`Decreased message fetch interval to ${this.mInterval-this.F_STEP} ms`);
       }
     }
@@ -668,7 +673,7 @@ export class SwarmChat {
 
   /** Returns the current message check interval, which is dynamic */
   public getMessageCheckInterval() {
-    return this.messageFetchInterval;
+    return this.messageFetchClock;
   }
 
   /** Returns the USER_UPDATE_INTERVAL constant, that can be set when creating a new SwarmChat instance */
@@ -701,6 +706,18 @@ export class SwarmChat {
     }
 
     this.logger = pino({ level: newLogLevel})
+  }
+
+  /** Gives back diagnostic data about the SwarmChat instance */
+  public getDiagnostics() {
+    return {
+      requestTimeAvg: this.reqTimeAvg,
+      users: this.users,
+      currentMessageFetchInterval: this.mInterval,
+      userActivityTable: this.userActivityTable,
+      newlyResigeredUsers: this.newlyResigeredUsers,
+      requestCount: this.reqCount
+    }
   }
 }
 
