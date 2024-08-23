@@ -21,6 +21,7 @@ import { AsyncQueue } from './asyncQueue';
 
 import { 
   ChatSettings,
+  ErrorObject,
   EthAddress, 
   MessageData, 
   ParticipantDetails, 
@@ -122,8 +123,11 @@ export class SwarmChat {
       await this.bee.createFeedManifest(stamp, 'sequence', consensusHash, graffitiSigner.address);
 
     } catch (error) {
-      console.error(error);
-      throw new Error('Could not create Users feed');
+      this.handleError({
+        error: error as unknown as Error,
+        context: `Could not create Users feed!`,
+        throw: true
+      });
     }
   }
 
@@ -204,8 +208,11 @@ export class SwarmChat {
       await this.setUsers(aggregatedList);
 
     } catch (error) {
-      console.error('Init users error: ', error);
-      throw error;
+      this.handleError({
+        error: error as unknown as Error,
+        context: `initUsers`,
+        throw: true
+      });
     } finally {
       this.emitStateEvent(EVENTS.LOADING_INIT_USERS, false);
     }
@@ -258,8 +265,6 @@ export class SwarmChat {
         throw new Error('User object validation failed');
       }
 
-      //await setUsers([...users, { ...newUser, index: -1 }]);
-
       const uploadObject: UsersFeedCommit = {
         users: [newUser],
         overwrite: false
@@ -278,8 +283,11 @@ export class SwarmChat {
         }
       }
     } catch (error) {
-      console.error(error);
-      throw new Error(`There was an error while trying to register user (chatroom): ${error}`);
+      this.handleError({
+        error: error as unknown as Error,
+        context: `registerUser`,
+        throw: false
+      });
     } finally {
       this.emitStateEvent(EVENTS.LOADING_REGISTRATION, false);
     }
@@ -292,8 +300,11 @@ export class SwarmChat {
       this.removeIdleUsersInterval = setInterval(() => this.removeIdleUsers(topic, ownAddress, stamp), this.REMOVE_INACTIVE_USERS_INTERVAL);
 
     } catch (error) {
-      console.error(error);
-      throw new Error('Could not start activity analysis');
+      this.handleError({
+        error: error as unknown as Error,
+        context: `startActivityAnalyzes`,
+        throw: false
+      });
     }
   }
 
@@ -316,8 +327,11 @@ export class SwarmChat {
       console.log("User Activity Table: ", this.userActivityTable);
 
     } catch (error) {
-      console.error(error);
-      throw new Error('There was an error while processing new user registration in updateUserActivityAtRegistration');
+      this.handleError({
+        error: error as unknown as Error,
+        context: `updateUserActivityAtRegistration`,
+        throw: false
+      });
     }
   }
 
@@ -334,8 +348,11 @@ export class SwarmChat {
       console.log("User Activity Table (new message received): ", this.userActivityTable);
 
     } catch (error) {
-      console.error(error);
-      throw new Error('There wasn an error while processing new message on streamer side');
+      this.handleError({
+        error: error as unknown as Error,
+        context: `updateUserActivityAtNewMessage`,
+        throw: false
+      });
     }
   }
 
@@ -372,8 +389,11 @@ export class SwarmChat {
 
     } catch (error) {
       this.removeIdleIsRunning = false;
-      console.error(error);
-      //throw new Error('There was an error while removing idle users from the Users feed');
+      this.handleError({
+        error: error as unknown as Error,
+        context: `removeIdleUsers`,
+        throw: false
+      });
     }
   }
 
@@ -394,17 +414,16 @@ export class SwarmChat {
       console.log("Upload was successful!")    
 
     } catch (error) {
-      console.error(error);
-      throw new Error('There was an error while writing UsersFeedCommit to the Users feed');
+      this.handleError({
+        error: error as unknown as Error,
+        context: `writeUsersFeedCommit`,
+        throw: false
+      });
     }
   }
 
   // Adds a getNewUsers to the usersQueue, which will fetch new users
   private enqueueUserFetch(topic: string) {
-    if (!this.usersQueue) {
-      //this.usersQueue = new AsyncQueue({ indexed: false, waitable: true, max: 1 });
-      //TODO this will never happen
-    }
     return () => this.usersQueue.enqueue((index) => this.getNewUsers(topic));
   }
 
@@ -455,8 +474,11 @@ export class SwarmChat {
           this.reqTimeAvg.addValue(this.MAX_TIMEOUT);
         } else {
           if (!isNotFoundError(error)) {
-            console.error(error);
-            throw new Error('There was an error in the getNewUsers function');
+            this.handleError({
+              error: error as unknown as Error,
+              context: `getNewUsers`,
+              throw: false
+            });
           }
         }
       }
@@ -465,11 +487,6 @@ export class SwarmChat {
 
   // Goes through the users object, and enqueues a readMessage for each assumably active user
   private readMessagesForAll(topic: string) {
-    if (!this.messagesQueue) {
-      //TODO this will never happen
-      //this.messagesQueue = new AsyncQueue({ indexed: false, waitable: true, max: 4 });
-    }
-
     return async () => {
       const isWaiting = await this.messagesQueue.waitForProcessing();
       if (isWaiting) {
@@ -540,7 +557,11 @@ export class SwarmChat {
           if (!isNotFoundError(error)) {
             if (this.userActivityTable[user.address]) this.userActivityTable[user.address].readFails++;                  // We increment read fail count
             console.error(error);
-            throw new Error('There was an error in the readMessage function');
+            this.handleError({
+              error: error as unknown as Error,
+              context: `readMessage`,
+              throw: false
+            });
           }
         }
       }
@@ -580,7 +601,7 @@ export class SwarmChat {
     messageObj: MessageData,
     stamp: BatchId,
     privateKey: string,
-  ): Promise<Reference | null> {
+  ): Promise<Reference | undefined> {
     try {
       if (!privateKey) throw 'Private key is missing';
 
@@ -602,10 +623,11 @@ export class SwarmChat {
 
       return ref;
     } catch (error) {
-      console.error(
-        `There was an error while trying to write own feed (chat), index: ${this.ownIndex}, message: ${messageObj.message}: ${error}  `,
-      );
-      throw new Error('Could not send message');
+      this.handleError({
+        error: error as unknown as Error,
+        context: `sendMessage, index: ${this.ownIndex}, message: ${messageObj.message}`,
+        throw: false
+      });
     }
   }
 
@@ -631,7 +653,16 @@ export class SwarmChat {
 
   public getUserCount() {
     return this.users.length;
-  } 
+  }
+
+  private handleError(errObject: ErrorObject) {
+    console.error(`Error in ${errObject.context}:`, errObject.error.message);
+    this.emitter.emit('error', errObject);
+    if (errObject.throw) {
+      throw new Error(` Error in ${errObject.context}`);
+    }
+  }
+
 }
 
 

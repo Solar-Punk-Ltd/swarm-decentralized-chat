@@ -81,5 +81,11 @@ export interface ChatSettings {
     messageFetchMax?: number;                   // ms
     fStep?: number;                             // ms, messageFetch limit steps
 
+}
 
+// Error object that we send in catch blocks
+export interface ErrorObject {
+    error: Error;
+    context: string;
+    throw: boolean;
 }

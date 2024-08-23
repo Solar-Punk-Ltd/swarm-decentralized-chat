@@ -10,7 +10,8 @@ export const EVENTS = {
     LOADING_REGISTRATION: 'loadingRegistration',
     RECEIVE_MESSAGE: 'receiveMessage',
     USER_REGISTERED: 'userRegistered',
-    FEED_COMMIT_HASH: 'feedCommitHash'
+    FEED_COMMIT_HASH: 'feedCommitHash',
+    ERROR: 'errorEvent'
 };
 
 export const SECOND = 1000;
