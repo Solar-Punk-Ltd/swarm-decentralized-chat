@@ -62,3 +62,24 @@ export interface UserWithIndex extends User {
 
 // Where we use it, it is string. Will be used to create SHA hash
 export type Sha3Message = string | number[] | ArrayBuffer | Uint8Array;
+
+// SwarmChat settings (for constructor)
+export interface ChatSettings {
+    url?: string;                               // Bee url with port
+    usersFeedTimeout?: number;                  // ms
+    removeInactiveInterval?: number;            // ms
+    idleTime?: number;                          // ms
+    userLimit?: number;                         // Max active users
+    messageCheckInterval?: number;              // ms
+    userUpdateInterval?: number;                // ms
+    maxTimeout?: number;                        // ms, max timeout for readMessage
+    maxParallelIncreaseLimit?: number;          // ms
+    maxParallelDecreaseLimit?: number;          // ms
+    fetchIntervalIncreaseLimit?: number;        // ms
+    fetchIntervalDecreaseLimit?: number;        // ms
+    messageFetchMin?: number;                   // ms
+    messageFetchMax?: number;                   // ms
+    fStep?: number;                             // ms, messageFetch limit steps
+
+
+}

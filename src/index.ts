@@ -14,21 +14,9 @@ export type {
     EthAddress 
 } from './types';
 
-// Functions
+// Main Class
 export { 
-    sendMessage, 
-    getChatActions, 
-    initChatRoom, 
-    initUsers, 
-    registerUser,
-    isRegistered,
-    startMessageFetchProcess,
-    startUserFetchProcess,
-    stopMessageFetchProcess,
-    stopUserFetchProcess,
-    getUserCount,
-    setBeeUrl,
-    setUsersFeedTimeout,
+    SwarmChat
 } from './core';
 
 // Utils
