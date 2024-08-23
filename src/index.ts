@@ -1,3 +1,6 @@
+// Main Class
+export { SwarmChat } from './core';
+
 // Constants
 export { 
     EVENTS,
@@ -13,13 +16,3 @@ export type {
     UserWithIndex, 
     EthAddress 
 } from './types';
-
-// Main Class
-export { 
-    SwarmChat
-} from './core';
-
-// Utils
-export {
-    orderMessages
-} from './utils';

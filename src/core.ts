@@ -4,19 +4,8 @@ import pino from 'pino';
 import pinoPretty from 'pino-pretty';
 
 import { 
-  generateGraffitiFeedMetadata,
-  generateUserOwnedFeedId, 
-  getActiveUsers, 
-  getLatestFeedIndex, 
-  graffitiFeedReaderFromTopic, 
-  graffitiFeedWriterFromTopic, 
-  isNotFoundError, 
-  removeDuplicateUsers, 
-  retryAwaitableAsync, 
-  RunningAverage, 
-  selectUsersFeedCommitWriter, 
-  uploadObjectToBee, 
-  validateUserObject 
+  RunningAverage,
+  SwarmChatUtils
 } from './utils';
 import { EventEmitter } from './eventEmitter';
 import { AsyncQueue } from './asyncQueue';
@@ -83,6 +72,7 @@ export class SwarmChat {
     ignore: "pid,hostname"
   });
   private logger = pino(this.prettyStream);                                 // Logger. Levels: "fatal" | "error" | "warn" | "info" | "debug" | "trace" | "silent"
+  private utils: SwarmChatUtils;
   
   
   private eventStates: Record<string, boolean> = {                          // Which operation is in progress, if any
@@ -114,6 +104,8 @@ export class SwarmChat {
     this.F_STEP = settings.fStep || 100;                                                    // When interval is changed, it is changed by this value
     
     this.logger = pino({ level: settings.logLevel || "warn" }, this.prettyStream);          // Logger can be set to "fatal" | "error" | "warn" | "info" | "debug" | "trace" | "silent"
+
+    this.utils = new SwarmChatUtils(this.handleError.bind(this), this.logger);              // Initialize chat utils
   }
 
   // Should be used on front end, to be able to start chat, listen to events
@@ -130,7 +122,7 @@ export class SwarmChat {
   // Should be called from outside the library, for example React
   public async initChatRoom(topic: string, stamp: BatchId) {
     try {
-      const { consensusHash, graffitiSigner } = generateGraffitiFeedMetadata(topic);
+      const { consensusHash, graffitiSigner } = this.utils.generateGraffitiFeedMetadata(topic);
       await this.bee.createFeedManifest(stamp, 'sequence', consensusHash, graffitiSigner.address);
 
     } catch (error) {
@@ -184,7 +176,7 @@ export class SwarmChat {
     try {
       this.emitStateEvent(EVENTS.LOADING_INIT_USERS, true);
 
-      const feedReader = graffitiFeedReaderFromTopic(this.bee, topic);
+      const feedReader = this.utils.graffitiFeedReaderFromTopic(this.bee, topic);
       let aggregatedList: UserWithIndex[] = [];
 
       const feedEntry = await feedReader.download();
@@ -195,7 +187,7 @@ export class SwarmChat {
         const feedEntry = await feedReader.download({ index: i});
         const data = await this.bee.downloadData(feedEntry.reference);
         const objectFromFeed = data.json() as unknown as UsersFeedCommit;
-        const validUsers = objectFromFeed.users.filter((user) => validateUserObject(user, this.handleError));
+        const validUsers = objectFromFeed.users.filter((user) => this.utils.validateUserObject(user));
         if (objectFromFeed.overwrite) {                             // They will have index that was already written to the object by Activity Analysis writer
           const usersBatch: UserWithIndex[] = validUsers as unknown as UserWithIndex[];
           aggregatedList = [...aggregatedList, ...usersBatch];
@@ -204,8 +196,8 @@ export class SwarmChat {
           // We could go back until we find a timestamp, that has lower timestamp than now-IDLE
           break;
         } else {                                                    // These do not have index, but we can initialize them to 0
-          const userTopicString = generateUserOwnedFeedId(topic, validUsers[0].address);
-          const res = await getLatestFeedIndex(this.bee, this.bee.makeFeedTopic(userTopicString), validUsers[0].address);
+          const userTopicString = this.utils.generateUserOwnedFeedId(topic, validUsers[0].address);
+          const res = await this.utils.getLatestFeedIndex(this.bee, this.bee.makeFeedTopic(userTopicString), validUsers[0].address);
 
           const newUser =  { 
             ...validUsers[0], 
@@ -272,7 +264,7 @@ export class SwarmChat {
         signature,
       };
 
-      if (!validateUserObject(newUser, this.handleError)) {
+      if (!this.utils.validateUserObject(newUser)) {
         throw new Error('User object validation failed');
       }
 
@@ -281,15 +273,15 @@ export class SwarmChat {
         overwrite: false
       }
 
-      const userRef = await uploadObjectToBee(this.bee, uploadObject, stamp as any, this.handleError);
+      const userRef = await this.utils.uploadObjectToBee(this.bee, uploadObject, stamp as any);
       if (!userRef) throw new Error('Could not upload user to bee');
 
-      const feedWriter = graffitiFeedWriterFromTopic(this.bee, topic);
+      const feedWriter = this.utils.graffitiFeedWriterFromTopic(this.bee, topic);
 
       try {
         await feedWriter.upload(stamp, userRef.reference);
       } catch (error) {
-        if (isNotFoundError(error)) {
+        if (this.utils.isNotFoundError(error)) {
           await feedWriter.upload(stamp, userRef.reference, { index: 0 });
         }
       }
@@ -302,6 +294,11 @@ export class SwarmChat {
     } finally {
       this.emitStateEvent(EVENTS.LOADING_REGISTRATION, false);
     }
+  }
+
+  // We can't access SwarmChatUtils.orderMessages directly, from the outside.
+  public orderMessages(messages: MessageData[]) {
+    return this.utils.orderMessages(messages);
   }
 
   // Every User is doing Activity Analysis, and one of them is selected to write the UsersFeed
@@ -380,7 +377,7 @@ export class SwarmChat {
       }
       this.removeIdleIsRunning = true;
       
-      const activeUsers = getActiveUsers(this.users, this.userActivityTable, this.IDLE_TIME, this.USER_LIMIT, this.logger);
+      const activeUsers = this.utils.getActiveUsers(this.users, this.userActivityTable, this.IDLE_TIME, this.USER_LIMIT, this.logger);
 
       if (activeUsers.length === 0) {
         this.logger.info("There are no active users, Activity Analysis will continue when a user registers.");
@@ -390,7 +387,7 @@ export class SwarmChat {
         return;
       }
 
-      const selectedUser = selectUsersFeedCommitWriter(activeUsers, this.emitStateEvent, this.logger);
+      const selectedUser = this.utils.selectUsersFeedCommitWriter(activeUsers, this.emitStateEvent, this.logger);
 
       if (selectedUser === ownAddress) {
         await this.writeUsersFeedCommit(topic, stamp, activeUsers);
@@ -416,10 +413,10 @@ export class SwarmChat {
         users: activeUsers as UserWithIndex[],
         overwrite: true
       }
-      const userRef = await uploadObjectToBee(this.bee, uploadObject, stamp as any, this.handleError);
+      const userRef = await this.utils.uploadObjectToBee(this.bee, uploadObject, stamp as any);
       if (!userRef) throw new Error('Could not upload user list to bee');
 
-      const feedWriter = graffitiFeedWriterFromTopic(this.bee, topic, { timeout: this.USERS_FEED_TIMEOUT });
+      const feedWriter = this.utils.graffitiFeedWriterFromTopic(this.bee, topic, { timeout: this.USERS_FEED_TIMEOUT });
 
       await feedWriter.upload(stamp, userRef.reference);
       this.logger.debug("Upload was successful!")    
@@ -446,21 +443,21 @@ export class SwarmChat {
     try {
       this.emitStateEvent(EVENTS.LOADING_USERS, true);
     
-      const feedReader = graffitiFeedReaderFromTopic(this.bee, topic);
+      const feedReader = this.utils.graffitiFeedReaderFromTopic(this.bee, topic);
       const feedEntry = await feedReader.download({ index: this.usersFeedIndex });
     
       const data = await this.bee.downloadData(feedEntry.reference);
       const objectFromFeed = data.json() as unknown as UsersFeedCommit;
       this.logger.debug(`New UsersFeedCommit received!  ${objectFromFeed}`)
     
-      const validUsers = objectFromFeed.users.filter((user) => validateUserObject(user, this.handleError));
+      const validUsers = objectFromFeed.users.filter((user) => this.utils.validateUserObject(user));
 
       let newUsers: UserWithIndex[] = [];
       if (!objectFromFeed.overwrite) {
         // Registration
         newUsers = [...this.users];
-        const userTopicString = generateUserOwnedFeedId(topic, validUsers[0].address);
-        const res = await getLatestFeedIndex(this.bee, this.bee.makeFeedTopic(userTopicString), validUsers[0].address);
+        const userTopicString = this.utils.generateUserOwnedFeedId(topic, validUsers[0].address);
+        const res = await this.utils.getLatestFeedIndex(this.bee, this.bee.makeFeedTopic(userTopicString), validUsers[0].address);
         const theNewUser = {
           ...validUsers[0],
           index: res.latestIndex
@@ -470,11 +467,11 @@ export class SwarmChat {
         this.emitStateEvent(EVENTS.USER_REGISTERED, validUsers[0].username);
       } else {
         // Overwrite
-        newUsers = removeDuplicateUsers([...this.newlyResigeredUsers, ...validUsers as unknown as UserWithIndex[]]);
+        newUsers = this.utils.removeDuplicateUsers([...this.newlyResigeredUsers, ...validUsers as unknown as UserWithIndex[]]);
         this.newlyResigeredUsers = [];
       }
     
-      await this.setUsers(removeDuplicateUsers(newUsers));
+      await this.setUsers(this.utils.removeDuplicateUsers(newUsers));
       this.usersFeedIndex++;                                                                       // We assume that download was successful. Next time we are checking next index.
     
       // update userActivityTable
@@ -487,7 +484,7 @@ export class SwarmChat {
           this.logger.info(`Timeout exceeded.`);
           this.reqTimeAvg.addValue(this.MAX_TIMEOUT, this.logger);
         } else {
-          if (!isNotFoundError(error)) {
+          if (!this.utils.isNotFoundError(error)) {
             this.handleError({
               error: error as unknown as Error,
               context: `getNewUsers`,
@@ -518,13 +515,13 @@ export class SwarmChat {
   // Reads one message, from a user's own feed
   private async readMessage(user: UserWithIndex, rawTopic: string) {
     try {
-      const chatID = generateUserOwnedFeedId(rawTopic, user.address);
+      const chatID = this.utils.generateUserOwnedFeedId(rawTopic, user.address);
       const topic = this.bee.makeFeedTopic(chatID);
     
       let currIndex = user.index;
       if (user.index === -1) {
         this.logger.info("No index found! (user.index in readMessage)");
-        const { latestIndex, nextIndex } = await getLatestFeedIndex(this.bee, topic, user.address);
+        const { latestIndex, nextIndex } = await this.utils.getLatestFeedIndex(this.bee, topic, user.address);
         currIndex = latestIndex === -1 ? nextIndex : latestIndex;
       }
     
@@ -568,7 +565,7 @@ export class SwarmChat {
           //TODO decide between 'warn' and 'info'
           this.logger.info(`Timeout of ${this.MAX_TIMEOUT} exceeded for readMessage.`);
         } else {
-          if (!isNotFoundError(error)) {
+          if (!this.utils.isNotFoundError(error)) {
             if (this.userActivityTable[user.address]) this.userActivityTable[user.address].readFails++;                  // We increment read fail count
             this.handleError({
               error: error as unknown as Error,
@@ -618,15 +615,15 @@ export class SwarmChat {
     try {
       if (!privateKey) throw 'Private key is missing';
 
-      const feedID = generateUserOwnedFeedId(topic, address);
+      const feedID = this.utils.generateUserOwnedFeedId(topic, address);
       const feedTopicHex = this.bee.makeFeedTopic(feedID);
 
       if (this.ownIndex === -2) {
-        const { nextIndex } = await getLatestFeedIndex(this.bee, feedTopicHex, address);
+        const { nextIndex } = await this.utils.getLatestFeedIndex(this.bee, feedTopicHex, address);
         this.ownIndex = nextIndex;
       }
 
-      const msgData = await uploadObjectToBee(this.bee, messageObj, stamp, this.handleError);
+      const msgData = await this.utils.uploadObjectToBee(this.bee, messageObj, stamp);
       if (!msgData) throw 'Could not upload message data to bee';
 
       const feedWriter = this.bee.makeFeedWriter('sequence', feedTopicHex, privateKey);
@@ -645,7 +642,7 @@ export class SwarmChat {
 
   // Writes the users object, will avoid collision with other write operation
   private async setUsers(newUsers: UserWithIndex[]) {
-    return retryAwaitableAsync(async () => {
+    return this.utils.retryAwaitableAsync(async () => {
       if (this.usersLoading) {
         throw new Error('Users are still loading');
       }
@@ -694,7 +691,3 @@ export class SwarmChat {
 
 
 const x = new SwarmChat()
-const { on } = x.getChatActions()
-on(EVENTS.ERROR, (error) => {
-
-})
