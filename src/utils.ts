@@ -12,7 +12,6 @@ export class SwarmChatUtils {
   constructor(handleError: (errObject: ErrorObject) => void, logger: pino.Logger) {
     this.handleError = handleError;
     this.logger = logger;
-    // possibly other init tasks
   }
 
   // Generate an ID for the feed, that will be connected to the stream, as Users list
@@ -134,22 +133,25 @@ export class SwarmChatUtils {
   async retryAwaitableAsync<T>(
     fn: () => Promise<T>,
     retries: number = 3,
-    delay: number = 250,
-    logger: pino.Logger
+    delay: number = 250
   ): Promise<T> {
     return new Promise((resolve, reject) => {
       fn()
         .then(resolve)
         .catch((error) => {
           if (retries > 0) {
-            logger.info(`Retrying... Attempts left: ${retries}. Error: ${error.message}`);
+            this.logger.info(`Retrying... Attempts left: ${retries}. Error: ${error.message}`);
             setTimeout(() => {
-              this.retryAwaitableAsync(fn, retries - 1, delay, logger)
+              this.retryAwaitableAsync(fn, retries - 1, delay)
                 .then(resolve)
                 .catch(reject);
             }, delay);
           } else {
-            logger.error(`Failed after ${retries} initial attempts. Last error: ${error.message}`);
+            this.handleError({
+              error: error as unknown as Error,
+              context: `Failed after ${retries} initial attempts. Last error: ${error.message}`,
+              throw: false
+            });
             reject(error);
           }
         });
@@ -233,12 +235,12 @@ export class SwarmChatUtils {
   }
 
   // selectUsersFeedCommitWriter will select a user who will write a UsersFeedCommit object to the feed
-  selectUsersFeedCommitWriter(activeUsers: UserWithIndex[], emitStateEvent: any, logger: pino.Logger): EthAddress {
+  selectUsersFeedCommitWriter(activeUsers: UserWithIndex[], emitStateEvent: any): EthAddress {
     const minUsersToSelect = 1;
     const numUsersToselect = Math.max(Math.ceil(activeUsers.length * 0.3), minUsersToSelect);     // Select top 30% of activeUsers, but minimum 1
     const mostActiveUsers = activeUsers.slice(0, numUsersToselect);                               // Top 30% but minimum 3 (minUsersToSelect)
 
-    logger.debug(`Most active users:  ${mostActiveUsers}`);
+    this.logger.debug(`Most active users:  ${mostActiveUsers}`);
     const sortedMostActiveAddresses = mostActiveUsers.map((user) => user.address).sort();
     const seedString = sortedMostActiveAddresses.join(',');                                       // All running instances should have the same string at this time
     const hash = crypto.createHash('sha256').update(seedString).digest('hex');                    // Hash should be same in all computers that are in this chat
@@ -249,7 +251,7 @@ export class SwarmChatUtils {
   }
 
   // Gives back the currently active users, based on idle time and user count limit calculation
-  getActiveUsers(users: UserWithIndex[], userActivityTable: UserActivity, idleTime: number, limit: number, logger: pino.Logger): UserWithIndex[] {
+  getActiveUsers(users: UserWithIndex[], userActivityTable: UserActivity, idleTime: number, limit: number): UserWithIndex[] {
     const idleMs: IdleMs = {};
     const now = Date.now();
 
@@ -258,7 +260,7 @@ export class SwarmChatUtils {
       idleMs[key] = now - userActivityTable[key].timestamp;
     }
 
-    logger.debug(`Users inside removeIdle:  ${users}`)
+    this.logger.debug(`Users inside removeIdle:  ${users}`)
     const activeUsers = users.filter((user) => {
       const userAddr = user.address;
       if (!userActivityTable[userAddr]) {
@@ -286,13 +288,17 @@ export class RunningAverage {
   private values: number[];
   private sum: number;
 
-  constructor(maxSize: number) {
+  private logger: pino.Logger;
+
+  constructor(maxSize: number, logger: pino.Logger) {
     this.maxSize = maxSize;
     this.values = [];
     this.sum = 0;
+
+    this.logger = logger;
   }
 
-  addValue(newValue: number, logger: pino.Logger) {
+  addValue(newValue: number) {
     if (this.values.length === this.maxSize) {
       const removedValue = this.values.shift();
       if (removedValue !== undefined) {
@@ -303,7 +309,7 @@ export class RunningAverage {
     this.values.push(newValue);
     this.sum += newValue;
 
-    logger.info(`Current average:  ${this.getAverage()}`);
+    this.logger.info(`Current average:  ${this.getAverage()}`);
   }
 
   getAverage() {

@@ -3,10 +3,7 @@ import { ethers, Signature } from 'ethers';
 import pino from 'pino';
 import pinoPretty from 'pino-pretty';
 
-import { 
-  RunningAverage,
-  SwarmChatUtils
-} from './utils';
+import {  RunningAverage, SwarmChatUtils } from './utils';
 import { EventEmitter } from './eventEmitter';
 import { AsyncQueue } from './asyncQueue';
 
@@ -50,9 +47,9 @@ export class SwarmChat {
   private bee = new Bee('http://localhost:1633');
   private emitter = new EventEmitter();
   private messages: MessageData[] = [];
-  private reqTimeAvg = new RunningAverage(1000);
-  private usersQueue: AsyncQueue = new AsyncQueue({ indexed: false, waitable: true, max: 1 });
-  private messagesQueue: AsyncQueue = new AsyncQueue({ indexed: false, waitable: true, max: 4 });
+  private reqTimeAvg;
+  private usersQueue: AsyncQueue;
+  private messagesQueue: AsyncQueue;
   private users: UserWithIndex[] = [];
   private usersLoading = false;
   private usersFeedIndex: number = 0;                                       // Will be overwritten on user-side, by initUsers
@@ -106,6 +103,9 @@ export class SwarmChat {
     this.logger = pino({ level: settings.logLevel || "warn" }, this.prettyStream);          // Logger can be set to "fatal" | "error" | "warn" | "info" | "debug" | "trace" | "silent"
 
     this.utils = new SwarmChatUtils(this.handleError.bind(this), this.logger);              // Initialize chat utils
+    this.usersQueue = new AsyncQueue({ indexed: false, waitable: true, max: 1 }, this.handleError.bind(this), this.logger);
+    this.messagesQueue = new AsyncQueue({ indexed: false, waitable: true, max: 4 }, this.handleError.bind(this), this.logger);
+    this.reqTimeAvg = new RunningAverage(1000, this.logger);
   }
 
   // Should be used on front end, to be able to start chat, listen to events
@@ -377,7 +377,7 @@ export class SwarmChat {
       }
       this.removeIdleIsRunning = true;
       
-      const activeUsers = this.utils.getActiveUsers(this.users, this.userActivityTable, this.IDLE_TIME, this.USER_LIMIT, this.logger);
+      const activeUsers = this.utils.getActiveUsers(this.users, this.userActivityTable, this.IDLE_TIME, this.USER_LIMIT);
 
       if (activeUsers.length === 0) {
         this.logger.info("There are no active users, Activity Analysis will continue when a user registers.");
@@ -387,7 +387,7 @@ export class SwarmChat {
         return;
       }
 
-      const selectedUser = this.utils.selectUsersFeedCommitWriter(activeUsers, this.emitStateEvent, this.logger);
+      const selectedUser = this.utils.selectUsersFeedCommitWriter(activeUsers, this.emitStateEvent);
 
       if (selectedUser === ownAddress) {
         await this.writeUsersFeedCommit(topic, stamp, activeUsers);
@@ -432,10 +432,7 @@ export class SwarmChat {
 
   // Adds a getNewUsers to the usersQueue, which will fetch new users
   private enqueueUserFetch(topic: string) {
-    return () => this.usersQueue.enqueue(
-      (index) => this.getNewUsers(topic), 
-      this.logger
-    );
+    return () => this.usersQueue.enqueue((index) => this.getNewUsers(topic));
   }
 
   // Reads the Users feed, and changes the users object, accordingly
@@ -482,7 +479,7 @@ export class SwarmChat {
       if (error instanceof Error) {
         if (error.message.includes("timeout")) {
           this.logger.info(`Timeout exceeded.`);
-          this.reqTimeAvg.addValue(this.MAX_TIMEOUT, this.logger);
+          this.reqTimeAvg.addValue(this.MAX_TIMEOUT);
         } else {
           if (!this.utils.isNotFoundError(error)) {
             this.handleError({
@@ -507,7 +504,7 @@ export class SwarmChat {
       for (const user of this.users) {
         this.reqCount++;
         this.logger.trace(`Request enqueued. Total request count: ${this.reqCount}`);
-        this.messagesQueue.enqueue(() => this.readMessage(user, topic), this.logger);
+        this.messagesQueue.enqueue(() => this.readMessage(user, topic));
       }
     };
   }
@@ -532,7 +529,7 @@ export class SwarmChat {
       const start = Date.now();
       const recordPointer = await feedReader.download({ index: currIndex });
       const end = Date.now();
-      this.reqTimeAvg.addValue(end-start, this.logger);
+      this.reqTimeAvg.addValue(end-start);
       
 
       // We download the actual message data
@@ -582,8 +579,8 @@ export class SwarmChat {
   //TODO this might be an utils function, but we need to pass a lot of paramerers, and in the other direction as well (return)
   private adjustParamerets(topic: string) {
     // Adjust max parallel request count, based on avg request time, which indicates, how much the node is overloaded
-    if (this.reqTimeAvg.getAverage() > this.DECREASE_LIMIT) this.messagesQueue.decreaseMax(this.logger);
-    if (this.reqTimeAvg.getAverage() < this.INCREASE_LIMIT) this.messagesQueue.increaseMax(this.users.length * 1, this.logger);
+    if (this.reqTimeAvg.getAverage() > this.DECREASE_LIMIT) this.messagesQueue.decreaseMax();
+    if (this.reqTimeAvg.getAverage() < this.INCREASE_LIMIT) this.messagesQueue.increaseMax(this.users.length * 1);
 
     // Adjust message fetch interval
     if (this.reqTimeAvg.getAverage() > this.FETCH_INTERVAL_INCREASE_LIMIT) {
@@ -649,7 +646,7 @@ export class SwarmChat {
       this.usersLoading = true;
       this.users = newUsers;
       this.usersLoading = false;
-    }, undefined, undefined, this.logger);
+    });
   }
 
   // Emit event about state change

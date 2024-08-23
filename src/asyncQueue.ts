@@ -1,6 +1,7 @@
 import pino from "pino";
 import { FIRST_SEGMENT_INDEX } from "./constants";
 import { incrementHexString, sleep } from "./utils";
+import { ErrorObject } from "./types";
 
 // A promise queue, that will keep a specified max parallel request count
 export class AsyncQueue {
@@ -14,16 +15,33 @@ export class AsyncQueue {
   private queue: ((index?: string) => Promise<void>)[] = [];
   private maxParallel: number;
 
-  constructor(settings: { indexed?: boolean; index?: string; waitable?: boolean; clearWaitTime?: number; max?: number } = {}) {
+  private handleError: (errObject: ErrorObject) => void;
+  private logger: pino.Logger;
+
+  constructor(
+    settings: { 
+      indexed?: boolean; 
+      index?: string; 
+      waitable?: boolean; 
+      clearWaitTime?: 
+      number;
+      max?: number
+    } = {},
+    handleError: (errObject: ErrorObject) => void,
+    logger: pino.Logger
+  ) {
     this.indexed = settings.indexed || false;
     this.index = settings.index || FIRST_SEGMENT_INDEX;
     this.waitable = settings.waitable || false;
     this.clearWaitTime = settings.clearWaitTime || 100;
     this.maxParallel = settings.max || 5;
+
+    this.handleError = handleError;
+    this.logger = logger;
   }
 
   // Executes promises from the AsyncQueue, will execute maxParallel count parallel requests
-  private async processQueue(logger: pino.Logger) {
+  private async processQueue() {
     if (this.inProgressCount >= this.maxParallel) return;
     this.isProcessing = true;
 
@@ -37,7 +55,11 @@ export class AsyncQueue {
           await action();
           this.index = incrementHexString(this.index);
         } catch (error) {
-          logger.error('Error processing promise:', error);
+          this.handleError({
+            error: error as unknown as Error,
+            context: 'Error processing promise',
+            throw: false
+          });
         } finally {
           this.inProgressCount = this.inProgressCount-1;
         }
@@ -47,7 +69,11 @@ export class AsyncQueue {
             this.index = incrementHexString(this.index);
           })
           .catch((error) => {
-            logger.error('Error processing promise:', error);
+            this.handleError({
+              error: error as unknown as Error,
+              context: 'Error processing promise',
+              throw: false
+            });
           })
           .finally(() => {
             this.inProgressCount = this.inProgressCount-1;
@@ -59,24 +85,24 @@ export class AsyncQueue {
   }
 
   // Enqueue a promise into the AsyncQueue
-  enqueue(promiseFunction: (index?: string) => Promise<any>, logger: pino.Logger) {
+  enqueue(promiseFunction: (index?: string) => Promise<any>) {
     this.queue.push(promiseFunction);
-    this.processQueue(logger);
+    this.processQueue();
   }
 
   // Increase the number of maximum parallel requests
-  increaseMax(limit: number, logger: pino.Logger) {
+  increaseMax(limit: number) {
     if (this.maxParallel+1 <= limit) {
       this.maxParallel++;
     }
-    logger.info("Max parallel request set to ", this.maxParallel);
+    this.logger.info("Max parallel request set to ", this.maxParallel);
   }
 
   // Decrease the number of maximum parallel requests
-  decreaseMax(logger: pino.Logger) {
+  decreaseMax() {
     if (this.maxParallel > 1) {
       this.maxParallel--;
-      logger.info("Max parallel request set to ", this.maxParallel);
+      this.logger.info("Max parallel request set to ", this.maxParallel);
     }
   }
 
