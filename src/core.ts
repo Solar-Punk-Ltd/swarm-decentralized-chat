@@ -394,6 +394,8 @@ export class SwarmChat {
   // This selection is pseudo-random, and it should select the same user in every app instance
   private async removeIdleUsers(topic: string, ownAddress: EthAddress, stamp: BatchId) {
     try {
+      if (this.reqCount < 32) return; // Newly registered users shouldn't take part in this.
+
       this.logger.debug(`UserActivity table inside removeIdleUsers:  ${this.userActivityTable}`);
       if (this.removeIdleIsRunning) {
         this.logger.warn("Previous removeIdleUsers is still running");

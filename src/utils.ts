@@ -286,7 +286,7 @@ export class SwarmChatUtils {
       const userAddr = user.address;
       if (!userActivityTable[userAddr]) {
         userActivityTable[userAddr] = {
-          timestamp: user.timestamp,
+          timestamp: Date.now(),  // this used to be user.timestamp, but it is possibly causing a bug
           readFails: 0
         }
         return true;
