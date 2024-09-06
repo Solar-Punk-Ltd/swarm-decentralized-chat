@@ -192,15 +192,35 @@ export class SwarmChat {
 
       // Go back, until we find an overwrite commit
       for (let i = this.usersFeedIndex-1; i >= 0 ; i--) {        
-        const usersFeedCommit = this.utils.fetchUsersFeedAtIndex(this.bee, feedReader, i) as unknown as UsersFeedCommit;
-        const validUsers = usersFeedCommit.users.filter((user) => this.utils.validateUserObject(user));
+        let usersFeedCommit = await this.utils.fetchUsersFeedAtIndex(this.bee, feedReader, i) as unknown as UsersFeedCommit;
+        let validUsers = usersFeedCommit.users.filter((user) => this.utils.validateUserObject(user));
 
         if (usersFeedCommit.overwrite) {                             // They will have index that was already written to the object by Activity Analysis writer
           const usersBatch: UserWithIndex[] = validUsers as unknown as UserWithIndex[];
           aggregatedList = [...aggregatedList, ...usersBatch];
-          //TODO either quit, or check just the previous message
-          // because that might be a registration, that was not recorded yet, in overwrite commit message
-          // We could go back until we find a timestamp, that has lower timestamp than now-IDLE
+
+          const thresholdTime = Date.now() - this.IDLE_TIME;
+          let lastTimestamp = Date.now();
+
+          // Registration that is not on aggregated list yet
+          do {
+            i--;
+            if (i < 0) break;
+            usersFeedCommit = await this.utils.fetchUsersFeedAtIndex(this.bee, feedReader, i) as unknown as UsersFeedCommit;
+            validUsers = usersFeedCommit.users.filter((user) => this.utils.validateUserObject(user));
+            if (!usersFeedCommit.overwrite) {
+              const userTopicString = this.utils.generateUserOwnedFeedId(topic, validUsers[0].address);
+              const res = await this.utils.getLatestFeedIndex(this.bee, this.bee.makeFeedTopic(userTopicString), validUsers[0].address);
+    
+              const newUser =  { 
+                ...validUsers[0], 
+                index: res.latestIndex
+              };
+
+              aggregatedList = [...aggregatedList, newUser];
+            }
+          } while (i >= 0 && lastTimestamp > thresholdTime);
+          
           break;
         } else {                                                    // These do not have index, but we can initialize them to 0
           const userTopicString = this.utils.generateUserOwnedFeedId(topic, validUsers[0].address);
@@ -215,6 +235,7 @@ export class SwarmChat {
         }
       }
 
+      aggregatedList = this.utils.removeDuplicateUsers(aggregatedList);
       await this.setUsers(aggregatedList);
 
     } catch (error) {

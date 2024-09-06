@@ -133,6 +133,8 @@ export class SwarmChatUtils {
 
   async fetchUsersFeedAtIndex(bee: Bee, feedReader: FeedReader, i: number): Promise<UsersFeedCommit|null> {
     try {
+      if (i < 0) throw "Index out of range!";
+
       const feedEntry = await feedReader.download({ index: i});
       const data = await bee.downloadData(feedEntry.reference);
       const objectFromFeed = data.json() as unknown as UsersFeedCommit;
