@@ -126,4 +126,8 @@ export class AsyncQueue {
 
     this.isWaiting = false;
   }
+
+  public getMaxParallel(): number {
+    return this.maxParallel;
+  }
 }

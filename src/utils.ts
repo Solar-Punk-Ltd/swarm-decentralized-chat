@@ -1,8 +1,8 @@
 import { ethers, BytesLike, utils, Wallet } from 'ethers';
 import * as crypto from 'crypto';
 import pino from 'pino';
-import { BatchId, Bee, BeeRequestOptions, Signer, UploadResult, Utils } from '@ethersphere/bee-js';
-import { ErrorObject, EthAddress, IdleMs, MessageData, Sha3Message, UserActivity, UserWithIndex } from './types';
+import { BatchId, Bee, BeeRequestOptions, FeedReader, Signer, UploadResult, Utils } from '@ethersphere/bee-js';
+import { ErrorObject, EthAddress, IdleMs, MessageData, Sha3Message, User, UserActivity, UsersFeedCommit, UserWithIndex } from './types';
 import { CONSENSUS_ID, EVENTS, HEX_RADIX } from './constants';
 
 export class SwarmChatUtils {
@@ -60,6 +60,8 @@ export class SwarmChatUtils {
       return false;
     }
   }
+
+
 
   // Returns timesstamp ordered messages
   orderMessages(messages: MessageData[]) {
@@ -127,6 +129,23 @@ export class SwarmChatUtils {
   incrementHexString(hexString: string, i = 1n) {
     const num = BigInt('0x' + hexString);
     return (num + i).toString(HEX_RADIX).padStart(HEX_RADIX, '0');
+  }
+
+  async fetchUsersFeedAtIndex(bee: Bee, feedReader: FeedReader, i: number): Promise<UsersFeedCommit|null> {
+    try {
+      const feedEntry = await feedReader.download({ index: i});
+      const data = await bee.downloadData(feedEntry.reference);
+      const objectFromFeed = data.json() as unknown as UsersFeedCommit;
+
+      return objectFromFeed
+    } catch (error) {
+      this.handleError({
+        error: error as unknown as Error,
+        context: `fetchUsersFeedAtIndex`,
+        throw: false
+      });
+      return null;
+    }
   }
 
   // retryAwaitableAsync will retry a promise if fails, default retry number is 3, default delay between attempts is 250 ms

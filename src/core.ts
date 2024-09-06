@@ -191,12 +191,11 @@ export class SwarmChat {
       this.usersFeedIndex = parseInt(feedEntry.feedIndexNext, HEX_RADIX);
 
       // Go back, until we find an overwrite commit
-      for (let i = this.usersFeedIndex-1; i >= 0 ; i--) {
-        const feedEntry = await feedReader.download({ index: i});
-        const data = await this.bee.downloadData(feedEntry.reference);
-        const objectFromFeed = data.json() as unknown as UsersFeedCommit;
-        const validUsers = objectFromFeed.users.filter((user) => this.utils.validateUserObject(user));
-        if (objectFromFeed.overwrite) {                             // They will have index that was already written to the object by Activity Analysis writer
+      for (let i = this.usersFeedIndex-1; i >= 0 ; i--) {        
+        const usersFeedCommit = this.utils.fetchUsersFeedAtIndex(this.bee, feedReader, i) as unknown as UsersFeedCommit;
+        const validUsers = usersFeedCommit.users.filter((user) => this.utils.validateUserObject(user));
+
+        if (usersFeedCommit.overwrite) {                             // They will have index that was already written to the object by Activity Analysis writer
           const usersBatch: UserWithIndex[] = validUsers as unknown as UserWithIndex[];
           aggregatedList = [...aggregatedList, ...usersBatch];
           //TODO either quit, or check just the previous message
@@ -714,9 +713,10 @@ export class SwarmChat {
       requestTimeAvg: this.reqTimeAvg,
       users: this.users,
       currentMessageFetchInterval: this.mInterval,
+      maxParallel: this.messagesQueue.getMaxParallel(),
       userActivityTable: this.userActivityTable,
       newlyResigeredUsers: this.newlyResigeredUsers,
-      requestCount: this.reqCount
+      requestCount: this.reqCount,
     }
   }
 }
