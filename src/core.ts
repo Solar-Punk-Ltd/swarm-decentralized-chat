@@ -474,7 +474,11 @@ export class SwarmChat {
       const feedReader = this.utils.graffitiFeedReaderFromTopic(this.bee, topic);
       const feedEntry = await feedReader.download({ index: this.usersFeedIndex });
     
-      const data = await this.bee.downloadData(feedEntry.reference);
+      const data = await this.bee.downloadData(feedEntry.reference, { 
+        headers: { 
+          'Swarm-Redundancy-Level': "0"
+        }
+      });
       const objectFromFeed = data.json() as unknown as UsersFeedCommit;
       this.logger.debug(`New UsersFeedCommit received!  ${objectFromFeed}`)
     
