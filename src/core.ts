@@ -180,7 +180,7 @@ export class SwarmChat {
   }
 
   /** Initializes the users object, when starting the application. Will try to figure out currently active users. */
-  public async initUsers(topic: string, ownAddress: EthAddress, stamp: BatchId) {
+  public async initUsers(topic: string) {
     try {
       this.emitStateEvent(EVENTS.LOADING_INIT_USERS, true);
 
@@ -563,7 +563,11 @@ export class SwarmChat {
       this.reqTimeAvg.addValue(end-start);
 
       // We download the actual message data
-      const data = await this.bee.downloadData(recordPointer.reference);
+      const data = await this.bee.downloadData(recordPointer.reference, { 
+        headers: { 
+          'Swarm-Redundancy-Level': "0"
+        }
+      });
       const messageData = JSON.parse(new TextDecoder().decode(data)) as MessageData;
     
       const uIndex = this.users.findIndex((u) => (u.address === user.address));
