@@ -730,6 +730,13 @@ export class SwarmChat {
     this.logger = pino({ level: newLogLevel})
   }
 
+  /**
+   * Change bee url
+   */
+  public changeBeeUrl(newUrl: string) {
+    this.bee = new Bee(newUrl);
+  }
+
   /** Gives back diagnostic data about the SwarmChat instance */
   public getDiagnostics() {
     return {
