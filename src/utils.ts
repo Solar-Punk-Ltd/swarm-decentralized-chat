@@ -263,10 +263,11 @@ export class SwarmChatUtils {
 
     this.logger.debug(`Most active users:  ${mostActiveUsers}`);
     const sortedMostActiveAddresses = mostActiveUsers.map((user) => user.address).sort();
-    const seedString = sortedMostActiveAddresses.join(',');                                       // All running instances should have the same string at this time
-    const hash = crypto.createHash('sha256').update(seedString).digest('hex');                    // Hash should be same in all computers that are in this chat
-    emitStateEvent(EVENTS.FEED_COMMIT_HASH, hash);
-    const randomIndex = parseInt(hash, 16) % mostActiveUsers.length;                              // They should have the same number, thus, selecting the same user
+    //const seedString = sortedMostActiveAddresses.join(',');                                       // All running instances should have the same string at this time
+    //const hash = crypto.createHash('sha256').update(seedString).digest('hex');                    // Hash should be same in all computers that are in this chat
+    //emitStateEvent(EVENTS.FEED_COMMIT_HASH, hash);
+    //const randomIndex = parseInt(hash, 16) % mostActiveUsers.length;                              // They should have the same number, thus, selecting the same user
+    const randomIndex = Math.floor(Math.random() * sortedMostActiveAddresses.length);
     
     return mostActiveUsers[randomIndex].address;
   }

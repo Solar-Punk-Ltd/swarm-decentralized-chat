@@ -199,15 +199,17 @@ export class SwarmChat {
           const usersBatch: UserWithIndex[] = validUsers as unknown as UserWithIndex[];
           aggregatedList = [...aggregatedList, ...usersBatch];
 
-          const thresholdTime = Date.now() - this.IDLE_TIME;
+          const thresholdTime = Date.now() - 60 * 1000;              // Threshold is 1 minute
           let lastTimestamp = Date.now();
 
           // Registration that is not on aggregated list yet
           do {
+            this.logger.debug(`'Registration that is not on aggregated list yet' cycle, i is ${i}`)
             i--;
             if (i < 0) break;
             usersFeedCommit = await this.utils.fetchUsersFeedAtIndex(this.bee, feedReader, i) as unknown as UsersFeedCommit;
             validUsers = usersFeedCommit.users.filter((user) => this.utils.validateUserObject(user));
+            lastTimestamp = validUsers[0].timestamp;
             if (!usersFeedCommit.overwrite) {
               const userTopicString = this.utils.generateUserOwnedFeedId(topic, validUsers[0].address);
               const res = await this.utils.getLatestFeedIndex(this.bee, this.bee.makeFeedTopic(userTopicString), validUsers[0].address);
@@ -218,6 +220,7 @@ export class SwarmChat {
               };
 
               aggregatedList = [...aggregatedList, newUser];
+              this.logger.debug(`User ${validUsers[0].username} added in 'Registration that is not on aggregated list yet' cycle`);
             }
           } while (i >= 0 && lastTimestamp > thresholdTime);
           
