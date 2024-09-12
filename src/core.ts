@@ -211,12 +211,12 @@ export class SwarmChat {
             validUsers = usersFeedCommit.users.filter((user) => this.utils.validateUserObject(user));
             lastTimestamp = validUsers[0].timestamp;
             if (!usersFeedCommit.overwrite) {
-              const userTopicString = this.utils.generateUserOwnedFeedId(topic, validUsers[0].address);
-              const res = await this.utils.getLatestFeedIndex(this.bee, this.bee.makeFeedTopic(userTopicString), validUsers[0].address);
+              //const userTopicString = this.utils.generateUserOwnedFeedId(topic, validUsers[0].address);
+              //const res = await this.utils.getLatestFeedIndex(this.bee, this.bee.makeFeedTopic(userTopicString), validUsers[0].address);
     
               const newUser =  { 
                 ...validUsers[0], 
-                index: res.latestIndex
+                index: -1
               };
 
               aggregatedList = [...aggregatedList, newUser];
@@ -226,12 +226,12 @@ export class SwarmChat {
           
           break;
         } else {                                                    // These do not have index, but we can initialize them to 0
-          const userTopicString = this.utils.generateUserOwnedFeedId(topic, validUsers[0].address);
-          const res = await this.utils.getLatestFeedIndex(this.bee, this.bee.makeFeedTopic(userTopicString), validUsers[0].address);
+          //const userTopicString = this.utils.generateUserOwnedFeedId(topic, validUsers[0].address);
+          //const res = await this.utils.getLatestFeedIndex(this.bee, this.bee.makeFeedTopic(userTopicString), validUsers[0].address);
 
           const newUser =  { 
             ...validUsers[0], 
-            index: res.latestIndex
+            index: -1
           };
           
           aggregatedList = [...aggregatedList, newUser];
@@ -488,11 +488,9 @@ export class SwarmChat {
       if (!objectFromFeed.overwrite) {
         // Registration
         newUsers = [...this.users];
-        const userTopicString = this.utils.generateUserOwnedFeedId(topic, validUsers[0].address);
-        const res = await this.utils.getLatestFeedIndex(this.bee, this.bee.makeFeedTopic(userTopicString), validUsers[0].address);
         const theNewUser = {
           ...validUsers[0],
-          index: res.latestIndex
+          index: -1
         };
         newUsers.push(theNewUser);
         this.newlyResigeredUsers.push(theNewUser);
@@ -557,7 +555,7 @@ export class SwarmChat {
         currIndex = latestIndex === -1 ? nextIndex : latestIndex;
       }
     
-      this.adjustParamerets(rawTopic);
+      this.adjustParamerets(rawTopic);      
 
       // We measure the request time with the first Bee API request, with the second request, we do not do this, because it is very similar
       const feedReader = this.bee.makeFeedReader('sequence', topic, user.address, { timeout: this.MAX_TIMEOUT });
