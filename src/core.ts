@@ -108,8 +108,8 @@ export class SwarmChat {
     }, this.prettyStream);          
 
     this.utils = new SwarmChatUtils(this.handleError.bind(this), this.logger);              // Initialize chat utils
-    this.usersQueue = new AsyncQueue({ indexed: false, waitable: true, max: 1 }, this.handleError.bind(this), this.logger);
-    this.messagesQueue = new AsyncQueue({ indexed: false, waitable: true, max: 4 }, this.handleError.bind(this), this.logger);
+    this.usersQueue = new AsyncQueue({ waitable: true, max: 1 }, this.handleError.bind(this), this.logger);
+    this.messagesQueue = new AsyncQueue({ waitable: true, max: 4 }, this.handleError.bind(this), this.logger);
     this.reqTimeAvg = new RunningAverage(1000, this.logger);
   }
 
