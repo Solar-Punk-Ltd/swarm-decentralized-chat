@@ -1,8 +1,8 @@
 import { ethers, BytesLike, utils, Wallet } from 'ethers';
 import * as crypto from 'crypto';
 import pino from 'pino';
-import { BatchId, Bee, BeeRequestOptions, Signer, UploadResult, Utils } from '@ethersphere/bee-js';
-import { ErrorObject, EthAddress, IdleMs, MessageData, Sha3Message, UserActivity, UserWithIndex } from './types';
+import { BatchId, Bee, BeeRequestOptions, FeedReader, Signer, UploadResult, Utils } from '@ethersphere/bee-js';
+import { ErrorObject, EthAddress, IdleMs, MessageData, Sha3Message, User, UserActivity, UsersFeedCommit, UserWithIndex } from './types';
 import { CONSENSUS_ID, EVENTS, HEX_RADIX } from './constants';
 
 export class SwarmChatUtils {
@@ -60,6 +60,8 @@ export class SwarmChatUtils {
       return false;
     }
   }
+
+
 
   // Returns timesstamp ordered messages
   orderMessages(messages: MessageData[]) {
@@ -127,6 +129,25 @@ export class SwarmChatUtils {
   incrementHexString(hexString: string, i = 1n) {
     const num = BigInt('0x' + hexString);
     return (num + i).toString(HEX_RADIX).padStart(HEX_RADIX, '0');
+  }
+
+  async fetchUsersFeedAtIndex(bee: Bee, feedReader: FeedReader, i: number): Promise<UsersFeedCommit|null> {
+    try {
+      if (i < 0) throw "Index out of range!";
+
+      const feedEntry = await feedReader.download({ index: i});
+      const data = await bee.downloadData(feedEntry.reference);
+      const objectFromFeed = data.json() as unknown as UsersFeedCommit;
+
+      return objectFromFeed
+    } catch (error) {
+      this.handleError({
+        error: error as unknown as Error,
+        context: `fetchUsersFeedAtIndex`,
+        throw: false
+      });
+      return null;
+    }
   }
 
   // retryAwaitableAsync will retry a promise if fails, default retry number is 3, default delay between attempts is 250 ms
@@ -242,10 +263,11 @@ export class SwarmChatUtils {
 
     this.logger.debug(`Most active users:  ${mostActiveUsers}`);
     const sortedMostActiveAddresses = mostActiveUsers.map((user) => user.address).sort();
-    const seedString = sortedMostActiveAddresses.join(',');                                       // All running instances should have the same string at this time
-    const hash = crypto.createHash('sha256').update(seedString).digest('hex');                    // Hash should be same in all computers that are in this chat
-    emitStateEvent(EVENTS.FEED_COMMIT_HASH, hash);
-    const randomIndex = parseInt(hash, 16) % mostActiveUsers.length;                              // They should have the same number, thus, selecting the same user
+    //const seedString = sortedMostActiveAddresses.join(',');                                       // All running instances should have the same string at this time
+    //const hash = crypto.createHash('sha256').update(seedString).digest('hex');                    // Hash should be same in all computers that are in this chat
+    //emitStateEvent(EVENTS.FEED_COMMIT_HASH, hash);
+    //const randomIndex = parseInt(hash, 16) % mostActiveUsers.length;                              // They should have the same number, thus, selecting the same user
+    const randomIndex = Math.floor(Math.random() * sortedMostActiveAddresses.length);
     
     return mostActiveUsers[randomIndex].address;
   }
@@ -265,7 +287,7 @@ export class SwarmChatUtils {
       const userAddr = user.address;
       if (!userActivityTable[userAddr]) {
         userActivityTable[userAddr] = {
-          timestamp: user.timestamp,
+          timestamp: Date.now(),  // this used to be user.timestamp, but it is possibly causing a bug
           readFails: 0
         }
         return true;

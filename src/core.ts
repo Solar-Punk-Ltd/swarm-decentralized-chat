@@ -108,8 +108,8 @@ export class SwarmChat {
     }, this.prettyStream);          
 
     this.utils = new SwarmChatUtils(this.handleError.bind(this), this.logger);              // Initialize chat utils
-    this.usersQueue = new AsyncQueue({ indexed: false, waitable: true, max: 1 }, this.handleError.bind(this), this.logger);
-    this.messagesQueue = new AsyncQueue({ indexed: false, waitable: true, max: 4 }, this.handleError.bind(this), this.logger);
+    this.usersQueue = new AsyncQueue({ waitable: true, max: 1 }, this.handleError.bind(this), this.logger);
+    this.messagesQueue = new AsyncQueue({ waitable: true, max: 4 }, this.handleError.bind(this), this.logger);
     this.reqTimeAvg = new RunningAverage(1000, this.logger);
   }
 
@@ -180,7 +180,7 @@ export class SwarmChat {
   }
 
   /** Initializes the users object, when starting the application. Will try to figure out currently active users. */
-  public async initUsers(topic: string, ownAddress: EthAddress, stamp: BatchId) {
+  public async initUsers(topic: string) {
     try {
       this.emitStateEvent(EVENTS.LOADING_INIT_USERS, true);
 
@@ -191,31 +191,54 @@ export class SwarmChat {
       this.usersFeedIndex = parseInt(feedEntry.feedIndexNext, HEX_RADIX);
 
       // Go back, until we find an overwrite commit
-      for (let i = this.usersFeedIndex-1; i >= 0 ; i--) {
-        const feedEntry = await feedReader.download({ index: i});
-        const data = await this.bee.downloadData(feedEntry.reference);
-        const objectFromFeed = data.json() as unknown as UsersFeedCommit;
-        const validUsers = objectFromFeed.users.filter((user) => this.utils.validateUserObject(user));
-        if (objectFromFeed.overwrite) {                             // They will have index that was already written to the object by Activity Analysis writer
+      for (let i = this.usersFeedIndex-1; i >= 0 ; i--) {        
+        let usersFeedCommit = await this.utils.fetchUsersFeedAtIndex(this.bee, feedReader, i) as unknown as UsersFeedCommit;
+        let validUsers = usersFeedCommit.users.filter((user) => this.utils.validateUserObject(user));
+
+        if (usersFeedCommit.overwrite) {                             // They will have index that was already written to the object by Activity Analysis writer
           const usersBatch: UserWithIndex[] = validUsers as unknown as UserWithIndex[];
           aggregatedList = [...aggregatedList, ...usersBatch];
-          //TODO either quit, or check just the previous message
-          // because that might be a registration, that was not recorded yet, in overwrite commit message
-          // We could go back until we find a timestamp, that has lower timestamp than now-IDLE
+
+          const thresholdTime = Date.now() - 60 * 1000;              // Threshold is 1 minute
+          let lastTimestamp = Date.now();
+
+          // Registration that is not on aggregated list yet
+          do {
+            this.logger.debug(`'Registration that is not on aggregated list yet' cycle, i is ${i}`)
+            i--;
+            if (i < 0) break;
+            usersFeedCommit = await this.utils.fetchUsersFeedAtIndex(this.bee, feedReader, i) as unknown as UsersFeedCommit;
+            validUsers = usersFeedCommit.users.filter((user) => this.utils.validateUserObject(user));
+            lastTimestamp = validUsers[0].timestamp;
+            if (!usersFeedCommit.overwrite) {
+              //const userTopicString = this.utils.generateUserOwnedFeedId(topic, validUsers[0].address);
+              //const res = await this.utils.getLatestFeedIndex(this.bee, this.bee.makeFeedTopic(userTopicString), validUsers[0].address);
+    
+              const newUser =  { 
+                ...validUsers[0], 
+                index: -1
+              };
+
+              aggregatedList = [...aggregatedList, newUser];
+              this.logger.debug(`User ${validUsers[0].username} added in 'Registration that is not on aggregated list yet' cycle`);
+            }
+          } while (i >= 0 && lastTimestamp > thresholdTime);
+          
           break;
         } else {                                                    // These do not have index, but we can initialize them to 0
-          const userTopicString = this.utils.generateUserOwnedFeedId(topic, validUsers[0].address);
-          const res = await this.utils.getLatestFeedIndex(this.bee, this.bee.makeFeedTopic(userTopicString), validUsers[0].address);
+          //const userTopicString = this.utils.generateUserOwnedFeedId(topic, validUsers[0].address);
+          //const res = await this.utils.getLatestFeedIndex(this.bee, this.bee.makeFeedTopic(userTopicString), validUsers[0].address);
 
           const newUser =  { 
             ...validUsers[0], 
-            index: res.latestIndex
+            index: -1
           };
           
           aggregatedList = [...aggregatedList, newUser];
         }
       }
 
+      aggregatedList = this.utils.removeDuplicateUsers(aggregatedList);
       await this.setUsers(aggregatedList);
 
     } catch (error) {
@@ -374,6 +397,8 @@ export class SwarmChat {
   // This selection is pseudo-random, and it should select the same user in every app instance
   private async removeIdleUsers(topic: string, ownAddress: EthAddress, stamp: BatchId) {
     try {
+      if (this.reqCount < 32) return; // Newly registered users shouldn't take part in this.
+
       this.logger.debug(`UserActivity table inside removeIdleUsers:  ${this.userActivityTable}`);
       if (this.removeIdleIsRunning) {
         this.logger.warn("Previous removeIdleUsers is still running");
@@ -449,7 +474,11 @@ export class SwarmChat {
       const feedReader = this.utils.graffitiFeedReaderFromTopic(this.bee, topic);
       const feedEntry = await feedReader.download({ index: this.usersFeedIndex });
     
-      const data = await this.bee.downloadData(feedEntry.reference);
+      const data = await this.bee.downloadData(feedEntry.reference, { 
+        headers: { 
+          'Swarm-Redundancy-Level': "0"
+        }
+      });
       const objectFromFeed = data.json() as unknown as UsersFeedCommit;
       this.logger.debug(`New UsersFeedCommit received!  ${objectFromFeed}`)
     
@@ -459,11 +488,9 @@ export class SwarmChat {
       if (!objectFromFeed.overwrite) {
         // Registration
         newUsers = [...this.users];
-        const userTopicString = this.utils.generateUserOwnedFeedId(topic, validUsers[0].address);
-        const res = await this.utils.getLatestFeedIndex(this.bee, this.bee.makeFeedTopic(userTopicString), validUsers[0].address);
         const theNewUser = {
           ...validUsers[0],
-          index: res.latestIndex
+          index: -1
         };
         newUsers.push(theNewUser);
         this.newlyResigeredUsers.push(theNewUser);
@@ -528,7 +555,7 @@ export class SwarmChat {
         currIndex = latestIndex === -1 ? nextIndex : latestIndex;
       }
     
-      this.adjustParamerets(rawTopic);
+      this.adjustParamerets(rawTopic);      
 
       // We measure the request time with the first Bee API request, with the second request, we do not do this, because it is very similar
       const feedReader = this.bee.makeFeedReader('sequence', topic, user.address, { timeout: this.MAX_TIMEOUT });
@@ -538,7 +565,11 @@ export class SwarmChat {
       this.reqTimeAvg.addValue(end-start);
 
       // We download the actual message data
-      const data = await this.bee.downloadData(recordPointer.reference);
+      const data = await this.bee.downloadData(recordPointer.reference, { 
+        headers: { 
+          'Swarm-Redundancy-Level': "0"
+        }
+      });
       const messageData = JSON.parse(new TextDecoder().decode(data)) as MessageData;
     
       const uIndex = this.users.findIndex((u) => (u.address === user.address));
@@ -708,15 +739,23 @@ export class SwarmChat {
     this.logger = pino({ level: newLogLevel})
   }
 
+  /**
+   * Change bee url
+   */
+  public changeBeeUrl(newUrl: string) {
+    this.bee = new Bee(newUrl);
+  }
+
   /** Gives back diagnostic data about the SwarmChat instance */
   public getDiagnostics() {
     return {
       requestTimeAvg: this.reqTimeAvg,
       users: this.users,
       currentMessageFetchInterval: this.mInterval,
+      maxParallel: this.messagesQueue.getMaxParallel(),
       userActivityTable: this.userActivityTable,
       newlyResigeredUsers: this.newlyResigeredUsers,
-      requestCount: this.reqCount
+      requestCount: this.reqCount,
     }
   }
 }

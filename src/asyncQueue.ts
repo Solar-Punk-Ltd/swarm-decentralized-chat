@@ -5,7 +5,6 @@ import { ErrorObject } from "./types";
 
 // A promise queue, that will keep a specified max parallel request count
 export class AsyncQueue {
-  private indexed;
   private waitable;
   private clearWaitTime;
   private index;
@@ -20,7 +19,6 @@ export class AsyncQueue {
 
   constructor(
     settings: { 
-      indexed?: boolean; 
       index?: string; 
       waitable?: boolean; 
       clearWaitTime?: 
@@ -30,7 +28,6 @@ export class AsyncQueue {
     handleError: (errObject: ErrorObject) => void,
     logger: pino.Logger
   ) {
-    this.indexed = settings.indexed || false;
     this.index = settings.index || FIRST_SEGMENT_INDEX;
     this.waitable = settings.waitable || false;
     this.clearWaitTime = settings.clearWaitTime || 100;
@@ -45,10 +42,10 @@ export class AsyncQueue {
     if (this.inProgressCount >= this.maxParallel) return;
     this.isProcessing = true;
 
-    while (this.queue.length > 0) {
+    while (this.queue.length > 0 && this.inProgressCount <= this.maxParallel) {
       this.inProgressCount = this.inProgressCount+1;
       const promise = this.queue.shift()!;
-      const action = this.indexed ? () => promise(this.index) : () => promise();
+      const action = () => promise();
 
       if (this.waitable) {
         try {
@@ -125,5 +122,9 @@ export class AsyncQueue {
     }
 
     this.isWaiting = false;
+  }
+
+  public getMaxParallel(): number {
+    return this.maxParallel;
   }
 }
