@@ -1,9 +1,10 @@
 import { BatchId, Bee, Reference } from '@ethersphere/bee-js';
 import { ethers, Signature } from 'ethers';
+import { InformationSignal } from '@anythread/gsoc';
 import pino from 'pino';
 import pinoPretty from 'pino-pretty';
 
-import {  RunningAverage, SwarmChatUtils } from './utils';
+import {  RunningAverage, sleep, SwarmChatUtils } from './utils';
 import { EventEmitter } from './eventEmitter';
 import { AsyncQueue } from './asyncQueue';
 
@@ -45,6 +46,7 @@ export class SwarmChat {
 
   /** Actual variables, like Bee instance, messages, analytics, user list, etc */
   private bee = new Bee('http://localhost:1633');
+  // TODO GSOC - we need an isGateway variable
   private emitter = new EventEmitter();
   private messages: MessageData[] = [];
   private reqTimeAvg;
@@ -136,6 +138,8 @@ export class SwarmChat {
     try {
       const { consensusHash, graffitiSigner } = this.utils.generateGraffitiFeedMetadata(topic);
       await this.bee.createFeedManifest(stamp, 'sequence', consensusHash, graffitiSigner.address);
+      // TODO GSOC - a Registration feed also needs to be created, when in Gateway mode.
+      // TODO GSOC - topic also needs to determine the Registration feed
 
     } catch (error) {
       this.handleError({
@@ -195,6 +199,7 @@ export class SwarmChat {
         let usersFeedCommit = await this.utils.fetchUsersFeedAtIndex(this.bee, feedReader, i) as unknown as UsersFeedCommit;
         let validUsers = usersFeedCommit.users.filter((user) => this.utils.validateUserObject(user));
 
+        // TODO GSOC - Users feed will not contain registration entries, and Gateway will write it.
         if (usersFeedCommit.overwrite) {                             // They will have index that was already written to the object by Activity Analysis writer
           const usersBatch: UserWithIndex[] = validUsers as unknown as UserWithIndex[];
           aggregatedList = [...aggregatedList, ...usersBatch];
@@ -211,8 +216,6 @@ export class SwarmChat {
             validUsers = usersFeedCommit.users.filter((user) => this.utils.validateUserObject(user));
             lastTimestamp = validUsers[0].timestamp;
             if (!usersFeedCommit.overwrite) {
-              //const userTopicString = this.utils.generateUserOwnedFeedId(topic, validUsers[0].address);
-              //const res = await this.utils.getLatestFeedIndex(this.bee, this.bee.makeFeedTopic(userTopicString), validUsers[0].address);
     
               const newUser =  { 
                 ...validUsers[0], 
@@ -225,9 +228,7 @@ export class SwarmChat {
           } while (i >= 0 && lastTimestamp > thresholdTime);
           
           break;
-        } else {                                                    // These do not have index, but we can initialize them to 0
-          //const userTopicString = this.utils.generateUserOwnedFeedId(topic, validUsers[0].address);
-          //const res = await this.utils.getLatestFeedIndex(this.bee, this.bee.makeFeedTopic(userTopicString), validUsers[0].address);
+        } else {
 
           const newUser =  { 
             ...validUsers[0], 
@@ -272,6 +273,7 @@ export class SwarmChat {
         throw new Error('The provided address does not match the address derived from the private key');
       }
 
+      // TODO GSOC - not every user is doing activity analysis. Only Gateway.
       this.startActivityAnalyzes(topic, address, stamp as BatchId);                  // Every User is doing Activity Analysis, and one of them is selected to write the UsersFeed
 
       const alreadyRegistered = this.users.find((user) => user.address === participant);
@@ -297,6 +299,7 @@ export class SwarmChat {
         throw new Error('User object validation failed');
       }
 
+      // TODO GSOC - upload the User object to a Registration feed, that is monitored by Gateway
       const uploadObject: UsersFeedCommit = {
         users: [newUser],
         overwrite: false
@@ -418,6 +421,7 @@ export class SwarmChat {
         return;
       }
 
+      // TODO GSOC - we don't select user, if this function is running, then you are the Gateway
       const selectedUser = this.utils.selectUsersFeedCommitWriter(activeUsers, this.emitStateEvent.bind(this));
 
       if (selectedUser === ownAddress) {
@@ -438,6 +442,7 @@ export class SwarmChat {
 
   // Write a UsersFeedCommit to the Users feed, which might remove some inactive users from the readMessagesForAll loop
   private async writeUsersFeedCommit(topic: string, stamp: BatchId, activeUsers: UserWithIndex[]) {
+    // TODO GSOC - If this function is running, then you are the Gateway (but try to think to the future as well, this might be conditional)
     try {
       this.logger.info("The user was selected for submitting the UsersFeedCommit! (removeIdleUsers)");
       const uploadObject: UsersFeedCommit = {
@@ -580,8 +585,11 @@ export class SwarmChat {
       // If the message is relatively new, we insert it to messages array, otherwise, we drop it
       if (messageData.timestamp + this.IDLE_TIME*2 > Date.now()) {
         this.messages.push(messageData);
+        
+        // TODO GSOC - this needs to be conditional, only Gateway is doing this.
         // Update userActivityTable
         this.updateUserActivityAtNewMessage(messageData);
+
         this.messagesIndex++;
       }
     
@@ -594,7 +602,6 @@ export class SwarmChat {
     } catch (error) {
       if (error instanceof Error) {
         if (error.message.includes("timeout")) {
-          //TODO decide between 'warn' and 'info'
           this.logger.info(`Timeout of ${this.MAX_TIMEOUT} exceeded for readMessage.`);
         } else {
           if (!this.utils.isNotFoundError(error)) {
@@ -763,3 +770,28 @@ export class SwarmChat {
 
 
 const x = new SwarmChat()
+
+// GSOC TEST
+async function gsocTest() {
+  const resourceId = "demo"
+  
+  // initialize object that will read and write the GSOC according to the passed consensus/configuration
+  const informationSignal = new InformationSignal("http://161.97.125.121:2433", {
+    postageBatchId: "8e4904c266f679c5392a5063d2196102f71768d8bec763084147ba64e2ef14c8" as BatchId,
+    resourceId,
+    consensus: {
+      id: "0336b3880fdf9decaafc17571536279c8b64d09ea00abea17004cc30289dffbe",
+      assertRecord: () => { return true }//isInformationSignalRecord,
+    },
+  })
+  
+  // subscribe to incoming topics on the receiver node
+  // this will immediately invoge `onMessage` and `onError` function if the message arrives to the target neighborhood of the Kademlia network.
+  const cancelSub = informationSignal.subscribe({onMessage: (msg: string) => console.log('my-life-event', msg), onError: console.log})
+  
+  // write GSOC record that satisfies the message format with the `write` method.
+  const uploadedSoc = await informationSignal.write(JSON.stringify({ text: 'Hello there!', timestamp: 1721989685349 }))
+  await sleep(500 * 1000)
+}
+
+gsocTest()
