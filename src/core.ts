@@ -87,7 +87,8 @@ export class SwarmChat {
   // Constructor, static variables will get value here
   constructor(settings: ChatSettings = {}, beeInstance?: Bee, eventEmitter?: EventEmitter) {
     this.bee = this.bee = beeInstance || new Bee(settings.url || 'http://localhost:1633');
-    this.gateway = settings.gateway || "";
+    this.gateway = settings.gateway || "";                                                  // If exists, SwarmChat will run in gateway mode
+    this.gsocResourceId = settings.gsocResourceId || "";                                    // When in gateway mode, normal nodes need to provide this
     this.emitter = eventEmitter || new EventEmitter();
     
     this.USERS_FEED_TIMEOUT = settings.usersFeedTimeout || 8 * SECOND;                      // Can adjust UsersFeedCommit write timeout, but higher values might cause SocketHangUp in Bee
@@ -564,7 +565,7 @@ export class SwarmChat {
         this.newlyResigeredUsers = [];
       }
     
-      if (!this.gateway) {
+      if (!this.gsocSubscribtion) {
         await this.setUsers(this.utils.removeDuplicateUsers(newUsers));
         this.usersFeedIndex++;                                                                       // We assume that download was successful. Next time we are checking next index.
       }
