@@ -1,9 +1,11 @@
 import { ethers, BytesLike, utils, Wallet } from 'ethers';
+import { InformationSignal } from '@anythread/gsoc';
 import * as crypto from 'crypto';
 import pino from 'pino';
 import { BatchId, Bee, BeeRequestOptions, FeedReader, Signer, UploadResult, Utils } from '@ethersphere/bee-js';
-import { ErrorObject, EthAddress, IdleMs, MessageData, Sha3Message, User, UserActivity, UsersFeedCommit, UserWithIndex } from './types';
+import { Bytes, ErrorObject, EthAddress, IdleMs, MessageData, PrefixedHexString, Sha3Message, User, UserActivity, UsersFeedCommit, UserWithIndex } from './types';
 import { CONSENSUS_ID, EVENTS, HEX_RADIX } from './constants';
+import { HexString } from '@anythread/gsoc/dist/types';
 
 export class SwarmChatUtils {
   private handleError: (errObject: ErrorObject) => void;
@@ -304,6 +306,74 @@ export class SwarmChatUtils {
   }
 
   /** GSOC EXPERIMENT */
+  private isHexString<Length extends number = number>(s: unknown, len?: number): s is HexString<Length> {
+    return typeof s === 'string' && /^[0-9a-f]+$/i.test(s) && (!len || s.length === len)
+  }
+  private isPrefixedHexString(s: unknown): s is PrefixedHexString {
+    return typeof s === 'string' && /^0x[0-9a-f]+$/i.test(s)
+  }
+  private assertHexString<Length extends number = number>(
+    s: unknown,
+    len?: number,
+    name = 'value',
+  ): asserts s is HexString<Length> {
+    if (!this.isHexString(s, len)) {
+      if (this.isPrefixedHexString(s)) {
+        throw new TypeError(`${name} not valid non prefixed hex string (has 0x prefix): ${s}`)
+      }
+  
+      // Don't display length error if no length specified in order not to confuse user
+      const lengthMsg = len ? ` of length ${len}` : ''
+      throw new TypeError(`${name} not valid hex string${lengthMsg}: ${s}`)
+    }
+  }
+  private hexToBytes<Length extends number, LengthHex extends number = number>(
+    hex: HexString<LengthHex>,
+  ): Bytes<Length> {
+    this.assertHexString(hex)
+  
+    const bytes = new Uint8Array(hex.length / 2)
+    for (let i = 0; i < bytes.length; i++) {
+      const hexByte = hex.substr(i * 2, 2)
+      bytes[i] = parseInt(hexByte, 16)
+    }
+  
+    return bytes as Bytes<Length>
+  }
+  private bytesToHex<Length extends number = number>(bytes: Uint8Array, len?: Length): HexString<Length> {
+    const hexByte = (n: number) => n.toString(16).padStart(2, '0')
+    const hex = Array.from(bytes, hexByte).join('') as HexString<Length>
+  
+    if (len && hex.length !== len) {
+      throw new TypeError(`Resulting HexString does not have expected length ${len}: ${hex}`)
+    }
+  
+    return hex
+  }
+
+  async gsocTest() {
+    // initialize object that will read and write the GSOC according to the passed consensus/configuration
+    let informationSignal = new InformationSignal("http://161.97.125.121:2433", {
+      postageBatchId: "8e4904c266f679c5392a5063d2196102f71768d8bec763084147ba64e2ef14c8" as BatchId,
+      consensus: {
+        id: 'SwarmDecentralizedChat:v1',
+        assertRecord: (input) => { return true }//isInformationSignalRecord,
+      },
+    });
+    
+    const overlayAddress = "86d2154575a43f3bf9922d9c52f0a63daca1cf352d57ef2b5027e38bc8d8f272";
+    const obj = informationSignal.mineResourceID(this.hexToBytes(overlayAddress), 11)
+    const resourceId = this.bytesToHex(obj.resourceId);
+  
+    
+    // subscribe to incoming topics on the receiver node
+    // this will immediately invoge `onMessage` and `onError` function if the message arrives to the target neighborhood of the Kademlia network.
+    const cancelSub = informationSignal.subscribe({onMessage: (msg: string) => console.log('my-life-event', msg), onError: console.log}, resourceId)
+    
+    // write GSOC record that satisfies the message format with the `write` method.
+    const uploadedSoc = await informationSignal.write(JSON.stringify({ text: 'Hello there!', timestamp: Date.now() }), resourceId)
+    await sleep(500 * 1000)
+  }
 }
 
 // Calculates and stores average, used for request time averaging
