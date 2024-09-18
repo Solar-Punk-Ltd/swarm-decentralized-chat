@@ -1,6 +1,7 @@
 import { BatchId, Bee, Reference } from '@ethersphere/bee-js';
 import { ethers, Signature } from 'ethers';
 import { InformationSignal } from '@anythread/gsoc';
+import { HexString, PrefixedHexString } from '@anythread/gsoc/dist/types';
 import pino from 'pino';
 import pinoPretty from 'pino-pretty';
 
@@ -21,6 +22,7 @@ import {
 } from './types';
 
 import { EVENTS, HEX_RADIX, MINUTE, SECOND } from './constants';
+
 
 /**
  * Swarm Decentralized Chat
@@ -772,25 +774,102 @@ export class SwarmChat {
 const x = new SwarmChat()
 
 // GSOC TEST
+const id = 'SwarmDecentralizedChat:v1'
+
+export interface SampleDappRecord {
+  /** text of the message */
+  text: string
+  /** creation time of the comment */
+  timestamp: number
+}
+
+function assertRecord(value: unknown): asserts value is SampleDappRecord {
+  if (
+    value !== null &&
+    typeof value === 'object' &&
+    Object.keys(value).includes('text') &&
+    Object.keys(value).includes('timestamp')
+  ) {
+    return
+  }
+  
+  throw new Error('The given value is not a valid personal storage record')
+}
+
+
+export interface Bytes<Length extends number> extends Uint8Array {
+  readonly length: Length
+}
+export function isHexString<Length extends number = number>(s: unknown, len?: number): s is HexString<Length> {
+  return typeof s === 'string' && /^[0-9a-f]+$/i.test(s) && (!len || s.length === len)
+}
+export function isPrefixedHexString(s: unknown): s is PrefixedHexString {
+  return typeof s === 'string' && /^0x[0-9a-f]+$/i.test(s)
+}
+function assertHexString<Length extends number = number>(
+  s: unknown,
+  len?: number,
+  name = 'value',
+): asserts s is HexString<Length> {
+  if (!isHexString(s, len)) {
+    if (isPrefixedHexString(s)) {
+      throw new TypeError(`${name} not valid non prefixed hex string (has 0x prefix): ${s}`)
+    }
+
+    // Don't display length error if no length specified in order not to confuse user
+    const lengthMsg = len ? ` of length ${len}` : ''
+    throw new TypeError(`${name} not valid hex string${lengthMsg}: ${s}`)
+  }
+}
+export function hexToBytes<Length extends number, LengthHex extends number = number>(
+  hex: HexString<LengthHex>,
+): Bytes<Length> {
+  assertHexString(hex)
+
+  const bytes = new Uint8Array(hex.length / 2)
+  for (let i = 0; i < bytes.length; i++) {
+    const hexByte = hex.substr(i * 2, 2)
+    bytes[i] = parseInt(hexByte, 16)
+  }
+
+  return bytes as Bytes<Length>
+}
+export function bytesToHex<Length extends number = number>(bytes: Uint8Array, len?: Length): HexString<Length> {
+  const hexByte = (n: number) => n.toString(16).padStart(2, '0')
+  const hex = Array.from(bytes, hexByte).join('') as HexString<Length>
+
+  if (len && hex.length !== len) {
+    throw new TypeError(`Resulting HexString does not have expected length ${len}: ${hex}`)
+  }
+
+  return hex
+}
+
 async function gsocTest() {
-  const resourceId = "demo"
+  //const resourceId = "demo"
   
   // initialize object that will read and write the GSOC according to the passed consensus/configuration
-  const informationSignal = new InformationSignal("http://161.97.125.121:2433", {
+  let informationSignal = new InformationSignal("http://161.97.125.121:2433", {
     postageBatchId: "8e4904c266f679c5392a5063d2196102f71768d8bec763084147ba64e2ef14c8" as BatchId,
-    resourceId,
     consensus: {
-      id: "0336b3880fdf9decaafc17571536279c8b64d09ea00abea17004cc30289dffbe",
-      assertRecord: () => { return true }//isInformationSignalRecord,
+      id,
+      assertRecord: (input) => { return true }//isInformationSignalRecord,
     },
-  })
+  });
+  
+  const overlayAddress = "86d2154575a43f3bf9922d9c52f0a63daca1cf352d57ef2b5027e38bc8d8f272";
+  const obj = informationSignal.mineResourceID(hexToBytes(overlayAddress), 11)
+  const resourceId = bytesToHex(obj.resourceId);
+  const gsocAddress = bytesToHex(obj.gsocAddress)
+
   
   // subscribe to incoming topics on the receiver node
   // this will immediately invoge `onMessage` and `onError` function if the message arrives to the target neighborhood of the Kademlia network.
-  const cancelSub = informationSignal.subscribe({onMessage: (msg: string) => console.log('my-life-event', msg), onError: console.log})
+  const cancelSub = informationSignal.subscribe({onMessage: (msg: string) => console.log('my-life-event', msg), onError: console.log}, resourceId)
+  console.log("gsoc address: ", cancelSub)
   
   // write GSOC record that satisfies the message format with the `write` method.
-  const uploadedSoc = await informationSignal.write(JSON.stringify({ text: 'Hello there!', timestamp: 1721989685349 }))
+  const uploadedSoc = await informationSignal.write(JSON.stringify({ text: 'Hello there!', timestamp: Date.now() }), resourceId)
   await sleep(500 * 1000)
 }
 

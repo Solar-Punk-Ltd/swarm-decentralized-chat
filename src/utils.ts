@@ -302,6 +302,8 @@ export class SwarmChatUtils {
 
     return sortedActiveUsers.slice(0, limit);
   }
+
+  /** GSOC EXPERIMENT */
 }
 
 // Calculates and stores average, used for request time averaging

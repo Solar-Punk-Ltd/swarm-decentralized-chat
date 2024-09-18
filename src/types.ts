@@ -9,6 +9,18 @@ type HexString<Length extends number = number> = FlavoredType<string & {
     readonly length: Length;
 }, 'HexString'>;
 
+// Used for GSOC
+export interface Bytes<Length extends number> extends Uint8Array {
+    readonly length: Length
+}
+/*export type HexString<Length extends number = number> = FlavoredType<
+  string & {
+    readonly length: Length
+  },
+  'HexString'
+>*/
+export type PrefixedHexString = FlavoredType<string, 'PrefixedHexString'>
+
 // This is a hex string of specific length (42)
 export type EthAddress = HexString<typeof ETH_ADDRESS_LENGTH>;
 
