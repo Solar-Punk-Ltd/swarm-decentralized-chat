@@ -11,6 +11,7 @@ import {
   ChatSettings,
   ErrorObject,
   EthAddress, 
+  GsocSubscribtion, 
   MessageData, 
   ParticipantDetails, 
   User, 
@@ -20,6 +21,7 @@ import {
 } from './types';
 
 import { EVENTS, HEX_RADIX, MINUTE, SECOND } from './constants';
+import { HexString } from '@anythread/gsoc/dist/types';
 
 
 /**
@@ -56,6 +58,9 @@ export class SwarmChat {
   private usersLoading = false;
   private usersFeedIndex: number = 0;                                       // Will be overwritten on user-side, by initUsers
   private ownIndex: number = -2;
+  private gateway: string = "";                                             // If this is true (exists), we are in gateway-mode. This is the overlay address of the gateway
+  private gsocResourceId: HexString<number> = "";                           // ResourceID for the GSOC feed. This was mined. (only in gateway-mode)
+  private gsocSubscribtion: GsocSubscribtion | null = null;                 // The GSOC subscribtion, only gateway has this. If this is not null, you are the Gateway (only in gateway-mode)
   private removeIdleUsersInterval: NodeJS.Timeout | null = null;            // Streamer-side interval, for idle user removing
   private userFetchClock: NodeJS.Timeout | null = null;                     // User-side interval, for user fetching (object created by setInterval)
   private messageFetchClock: NodeJS.Timeout | null = null;                  // User-side interval, for message fetching (object created by setInterval)
@@ -136,36 +141,38 @@ export class SwarmChat {
   /** Creates the Users feed, which is necesarry for user registration, and to handle idle users. This will create a new chat room. */
   public async initChatRoom(topic: string, stamp: BatchId, gateway?: string) {
     try {
+      // Create Users feed
       const { consensusHash, graffitiSigner } = this.utils.generateGraffitiFeedMetadata(topic);
       await this.bee.createFeedManifest(stamp, 'sequence', consensusHash, graffitiSigner.address);
 
-      // The GSOC Test
-      const resourceId = await this.utils.mineResourceId(
-        this.bee.url,
-        stamp,
-        "86d2154575a43f3bf9922d9c52f0a63daca1cf352d57ef2b5027e38bc8d8f272",
-        topic
-      );
-      if (!resourceId) throw "Could not create resource ID!";
 
-      const gsocSub = await this.utils.subscribeToGsoc(
-        this.bee.url,
-        stamp,
-        topic,
-        resourceId
-      );
+      if (gateway) {
+        this.gateway = gateway;
 
-      const uploadedSoc = await this.utils.sendMessageToGsoc(
-        this.bee.url,
-        stamp,
-        topic,
-        resourceId,
-        "Hello world!"
-      );
+        // Mine Resource ID for GSOC (will send message to specific neighborhood)
+        const resourceId = await this.utils.mineResourceId(
+          this.bee.url,
+          stamp,
+          gateway,
+          topic
+        );
+        if (!resourceId) throw "Could not create resource ID!";
+        else this.gsocResourceId = resourceId;
+  
+        // Subscribe to the GSOC feed
+        this.gsocSubscribtion = await this.utils.subscribeToGsoc(
+          this.bee.url,
+          stamp,
+          topic,
+          this.gsocResourceId
+        );
+  
+        // TODO GSOC - a Registration feed also needs to be created, when in Gateway mode.
+        // TODO GSOC - topic also needs to determine the Registration feed
+        // correction: we just created the registration feed, this is the registration feed.
+      }
 
 
-      // TODO GSOC - a Registration feed also needs to be created, when in Gateway mode.
-      // TODO GSOC - topic also needs to determine the Registration feed
 
     } catch (error) {
       this.handleError({
@@ -796,4 +803,9 @@ export class SwarmChat {
 
 
 const x = new SwarmChat({url: "http://161.97.125.121:2433"})
-x.initChatRoom("hello_gsoc", "8e4904c266f679c5392a5063d2196102f71768d8bec763084147ba64e2ef14c8" as BatchId,)
+
+x.initChatRoom(
+  "hello_gsoc", 
+  "8e4904c266f679c5392a5063d2196102f71768d8bec763084147ba64e2ef14c8" as BatchId,
+  "86d2154575a43f3bf9922d9c52f0a63daca1cf352d57ef2b5027e38bc8d8f272"
+)

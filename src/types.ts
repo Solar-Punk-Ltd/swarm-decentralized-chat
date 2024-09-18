@@ -21,6 +21,11 @@ export interface Bytes<Length extends number> extends Uint8Array {
 >*/
 export type PrefixedHexString = FlavoredType<string, 'PrefixedHexString'>
 
+export interface GsocSubscribtion {
+    close: () => void;
+    gsocAddress: Bytes<32>;
+}
+
 // This is a hex string of specific length (42)
 export type EthAddress = HexString<typeof ETH_ADDRESS_LENGTH>;
 

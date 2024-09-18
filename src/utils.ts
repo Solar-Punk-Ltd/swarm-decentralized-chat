@@ -353,33 +353,11 @@ export class SwarmChatUtils {
   }
 
   /**
-    * 
-    * @param url Bee url
-    * @param stamp Valid stamp
-    * @param gateway Overlay address of the gateway
-    */
-  async gsocTest(url: string, stamp: BatchId, gateway: string) {
-    // initialize object that will read and write the GSOC according to the passed consensus/configuration
-    let informationSignal = new InformationSignal(url, {
-      postageBatchId: stamp,
-      consensus: {
-        id: 'SwarmDecentralizedChat:v1',  // these will be the rooms, probably
-        assertRecord: (input) => { return true },
-      },
-    });
-    
-    const obj = informationSignal.mineResourceID(this.hexToBytes(gateway), 11);
-    const resourceId = this.bytesToHex(obj.resourceId);
-  
-    
-    // subscribe to incoming topics on the receiver node
-    // this will immediately invoge `onMessage` and `onError` function if the message arrives to the target neighborhood of the Kademlia network.
-    const cancelSub = informationSignal.subscribe({onMessage: (msg: string) => console.log('my-life-event', msg), onError: console.log}, resourceId);
-    
-    // write GSOC record that satisfies the message format with the `write` method.
-    const uploadedSoc = await informationSignal.write(JSON.stringify({ text: 'Hello there!', timestamp: Date.now() }), resourceId);
-  }
-
+  * @param url Bee url
+  * @param stamp Valid stamp
+  * @param gateway Overlay address of the gateway
+  * @param topic Topic for the chat
+  */
   async mineResourceId(url: string, stamp: BatchId, gateway: string, topic: string): Promise<HexString<number> | null>{
     try {
       const informationSignal = new InformationSignal(url, {
@@ -406,6 +384,8 @@ export class SwarmChatUtils {
 
   async subscribeToGsoc(url: string, stamp: BatchId, topic: string, resourceId: HexString<number>) {
     try {
+      if (!resourceId) throw "ResourceID was not provided!";
+
       const informationSignal = new InformationSignal(url, {
         postageBatchId: stamp,
         consensus: {
@@ -435,6 +415,8 @@ export class SwarmChatUtils {
 
   async sendMessageToGsoc(url: string, stamp: BatchId, topic: string, resourceId: HexString<number>, message: string): Promise<SingleOwnerChunk | undefined> {
     try {
+      if (!resourceId) throw "ResourceID was not provided!";
+
       const informationSignal = new InformationSignal(url, {
         postageBatchId: stamp,
         consensus: {
