@@ -157,7 +157,7 @@ export class SwarmChat {
         );
         if (!resourceId) throw "Could not create resource ID!";
         else this.gsocResourceId = resourceId;
-        console.log("resource ID: ", resourceId)
+        console.info("resource ID: ", resourceId)
   
         // Subscribe to the GSOC feed
         this.gsocSubscribtion = await this.utils.subscribeToGsoc(
@@ -306,12 +306,11 @@ export class SwarmChat {
       if (this.gateway) {
         if (this.gsocSubscribtion) {                                                   // Only the Gateway is doing Activity Analysis (removeIdleUsers is called by this function)
           this.startActivityAnalyzes(topic, address, stamp as BatchId);
-          console.log("You are the Gateway")
+          console.info("You are the Gateway")
         } else {
-          console.log("You are not the Gateway")
+          console.info("You are not the Gateway")
         }
       } else {
-        console.log("THIS ABOLUTELY SHOULDN'T RUN")
         this.startActivityAnalyzes(topic, address, stamp as BatchId);                  // Every User is doing Activity Analysis (when not in gateway mode), and one of them is selected to write the UsersFeed
       }
 
@@ -339,7 +338,6 @@ export class SwarmChat {
       }
 
       if (this.gateway) {         // Gateway mode
-    console.log("sending message to gsoc")    
         const result = await this.utils.sendMessageToGsoc(
           this.bee.url,
           stamp as BatchId,
@@ -350,7 +348,6 @@ export class SwarmChat {
 
         if (!result?.payload.length) throw "Error writing User object to GSOC!";
       } else {                    // Not in gateway mode
-        console.log("THIS ABOLUTELY SHOULDN'T RUN")
         const uploadObject: UsersFeedCommit = {
           users: [newUser],
           overwrite: false
@@ -464,7 +461,6 @@ export class SwarmChat {
       this.removeIdleIsRunning = true;
       
       const activeUsers = this.utils.getActiveUsers(this.users, this.userActivityTable, this.IDLE_TIME, this.USER_LIMIT);
-    console.log("activeUsers: ", activeUsers)
 
       if (activeUsers.length === 0) {
         this.logger.info("There are no active users, Activity Analysis will continue when a user registers.");
@@ -476,6 +472,7 @@ export class SwarmChat {
 
       let selectedUser: EthAddress;
       if (this.gateway) {                                         // If in gateway mode, the Gateway is always doing the Users feed writing
+        if (!this.gsocSubscribtion) throw "Only Gateway should run  this function in gateway mode!";
         selectedUser = ownAddress;                                // removeIdleUsers wouldn't run, if you wouldn't be the Gateway (when in gateway mode)
       } else {
         selectedUser = this.utils.selectUsersFeedCommitWriter(activeUsers, this.emitStateEvent.bind(this));
@@ -505,6 +502,7 @@ export class SwarmChat {
         users: activeUsers as UserWithIndex[],
         overwrite: true
       }
+
       const userRef = await this.utils.uploadObjectToBee(this.bee, uploadObject, stamp as any);
       if (!userRef) throw new Error('Could not upload user list to bee');
 
@@ -544,7 +542,6 @@ export class SwarmChat {
       });
       const objectFromFeed = data.json() as unknown as UsersFeedCommit;
       this.logger.debug(`New UsersFeedCommit received!  ${objectFromFeed}`)
-    console.log("New UsersFeedCommit received!",  objectFromFeed)
     
       const validUsers = objectFromFeed.users.filter((user) => this.utils.validateUserObject(user));
 
@@ -566,9 +563,11 @@ export class SwarmChat {
       }
     
       if (!this.gsocSubscribtion) {
+        console.log("Overwriting users object...")
         await this.setUsers(this.utils.removeDuplicateUsers(newUsers));
-        this.usersFeedIndex++;                                                                       // We assume that download was successful. Next time we are checking next index.
       }
+
+      this.usersFeedIndex++;                                                                       // We assume that download was successful. Next time we are checking next index.
     
       // update userActivityTable
       this.updateUserActivityAtRegistration();
@@ -600,10 +599,8 @@ export class SwarmChat {
         index: -1
       };
 
-      console.log("isRegistered: ", this.isRegistered(user.address))
       if (!this.isRegistered(user.address)) {
-        console.log("this.users: ", this.users)
-        let newList = [...this.users, user];
+        const newList = [...this.users, user];
         //this.utils.removeDuplicateUsers(newList);
   
         this.writeUsersFeedCommit(
@@ -870,7 +867,7 @@ async function host() {
     idleTime: (60*60*1000),
     gateway: "86d2154575a43f3bf9922d9c52f0a63daca1cf352d57ef2b5027e38bc8d8f272"
   })
-  const roomTopic = "gsoc-5"
+  const roomTopic = "gsoc-6"
   
   await x.initChatRoom(
     roomTopic, 

@@ -279,8 +279,7 @@ export class SwarmChatUtils {
   getActiveUsers(users: UserWithIndex[], userActivityTable: UserActivity, idleTime: number, limit: number): UserWithIndex[] {
     const idleMs: IdleMs = {};
     const now = Date.now();
-  console.log("idle const: ", idleTime)
-  console.log("limit: ", limit)
+
     for (const rawKey in userActivityTable) {
       const key = rawKey as unknown as EthAddress;
       if (!userActivityTable[key]) {
@@ -290,13 +289,10 @@ export class SwarmChatUtils {
         }
       }
       idleMs[key] = now - userActivityTable[key].timestamp;
-
-  // Log each user's idle time for debugging
-  console.log(`User ${key} has been idle for ${idleMs[key]} ms`);
     }
 
     this.logger.debug(`Users inside removeIdle:  ${users}`)
-  console.log("all users: ", users)
+
     const activeUsers = users.filter((user) => {
       return idleMs[user.address] < idleTime;
     });
