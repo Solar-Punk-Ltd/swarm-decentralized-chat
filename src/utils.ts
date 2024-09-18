@@ -305,7 +305,7 @@ export class SwarmChatUtils {
     return sortedActiveUsers.slice(0, limit);
   }
 
-  /** GSOC EXPERIMENT */
+  /** GSOC UTILS */
   private isHexString<Length extends number = number>(s: unknown, len?: number): s is HexString<Length> {
     return typeof s === 'string' && /^[0-9a-f]+$/i.test(s) && (!len || s.length === len)
   }
@@ -351,29 +351,46 @@ export class SwarmChatUtils {
     return hex
   }
 
-  async gsocTest() {
+  /**
+    * 
+    * @param url Bee url
+    * @param stamp Valid stamp
+    * @param gateway Overlay address of the gateway
+    */
+  async gsocTest(url: string, stamp: BatchId, gateway: string) {
     // initialize object that will read and write the GSOC according to the passed consensus/configuration
-    let informationSignal = new InformationSignal("http://161.97.125.121:2433", {
-      postageBatchId: "8e4904c266f679c5392a5063d2196102f71768d8bec763084147ba64e2ef14c8" as BatchId,
+    let informationSignal = new InformationSignal(url, {
+      postageBatchId: stamp,
       consensus: {
-        id: 'SwarmDecentralizedChat:v1',
-        assertRecord: (input) => { return true }//isInformationSignalRecord,
+        id: 'SwarmDecentralizedChat:v1',  // these will be the rooms, probably
+        assertRecord: (input) => { return true },
       },
     });
     
-    const overlayAddress = "86d2154575a43f3bf9922d9c52f0a63daca1cf352d57ef2b5027e38bc8d8f272";
-    const obj = informationSignal.mineResourceID(this.hexToBytes(overlayAddress), 11)
+    const obj = informationSignal.mineResourceID(this.hexToBytes(gateway), 11);
     const resourceId = this.bytesToHex(obj.resourceId);
   
     
     // subscribe to incoming topics on the receiver node
     // this will immediately invoge `onMessage` and `onError` function if the message arrives to the target neighborhood of the Kademlia network.
-    const cancelSub = informationSignal.subscribe({onMessage: (msg: string) => console.log('my-life-event', msg), onError: console.log}, resourceId)
+    const cancelSub = informationSignal.subscribe({onMessage: (msg: string) => console.log('my-life-event', msg), onError: console.log}, resourceId);
     
     // write GSOC record that satisfies the message format with the `write` method.
-    const uploadedSoc = await informationSignal.write(JSON.stringify({ text: 'Hello there!', timestamp: Date.now() }), resourceId)
-    await sleep(500 * 1000)
+    const uploadedSoc = await informationSignal.write(JSON.stringify({ text: 'Hello there!', timestamp: Date.now() }), resourceId);
   }
+
+  async mineResourceId(url: string, stamp: BatchId, gateway: string, topic: string): HexString<number> {
+    try {
+      
+    } catch (error) {
+      this.handleError({
+        error: error as unknown as Error,
+        context: `mineResourceId`,
+        throw: true
+      });
+    }
+  }
+
 }
 
 // Calculates and stores average, used for request time averaging

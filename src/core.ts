@@ -114,7 +114,12 @@ export class SwarmChat {
     this.messagesQueue = new AsyncQueue({ waitable: true, max: 4 }, this.handleError.bind(this), this.logger);
     this.reqTimeAvg = new RunningAverage(1000, this.logger);
 
-    this.utils.gsocTest()
+    // The GSOC Test
+    this.utils.gsocTest(
+      this.bee.url,
+      "8e4904c266f679c5392a5063d2196102f71768d8bec763084147ba64e2ef14c8" as BatchId,
+      "86d2154575a43f3bf9922d9c52f0a63daca1cf352d57ef2b5027e38bc8d8f272"
+    );
   }
 
   /** With getChatActions, it's possible to listen to events on front end or anywhere outside the library. 
@@ -771,26 +776,4 @@ export class SwarmChat {
 
 
 
-const x = new SwarmChat()
-// GSOC TEST, delete
-
-
-export interface SampleDappRecord {
-  /** text of the message */
-  text: string
-  /** creation time of the comment */
-  timestamp: number
-}
-
-function assertRecord(value: unknown): asserts value is SampleDappRecord {
-  if (
-    value !== null &&
-    typeof value === 'object' &&
-    Object.keys(value).includes('text') &&
-    Object.keys(value).includes('timestamp')
-  ) {
-    return
-  }
-  
-  throw new Error('The given value is not a valid personal storage record')
-}
+const x = new SwarmChat({url: "http://161.97.125.121:2433"})
