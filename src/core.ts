@@ -1,5 +1,5 @@
 import { BatchId, Bee, Reference } from '@ethersphere/bee-js';
-import { ethers, Signature } from 'ethers';
+import { ethers, Signature, Wallet } from 'ethers';
 import pino from 'pino';
 import pinoPretty from 'pino-pretty';
 
@@ -148,6 +148,7 @@ export class SwarmChat {
 
       if (gateway) {
         this.gateway = gateway;
+        console.log("this.gateway: ", this.gateway)
 
         // Mine Resource ID for GSOC (will send message to specific neighborhood)
         const resourceId = await this.utils.mineResourceId(
@@ -166,13 +167,7 @@ export class SwarmChat {
           topic,
           this.gsocResourceId
         );
-  
-        // TODO GSOC - a Registration feed also needs to be created, when in Gateway mode.
-        // TODO GSOC - topic also needs to determine the Registration feed
-        // correction: we just created the registration feed, this is the registration feed.
       }
-
-
 
     } catch (error) {
       this.handleError({
@@ -333,21 +328,36 @@ export class SwarmChat {
       }
 
       // TODO GSOC - upload the User object to a Registration feed, that is monitored by Gateway
-      const uploadObject: UsersFeedCommit = {
-        users: [newUser],
-        overwrite: false
-      }
-
-      const userRef = await this.utils.uploadObjectToBee(this.bee, uploadObject, stamp as any);
-      if (!userRef) throw new Error('Could not upload user to bee');
-
-      const feedWriter = this.utils.graffitiFeedWriterFromTopic(this.bee, topic);
-
-      try {
-        await feedWriter.upload(stamp, userRef.reference);
-      } catch (error) {
-        if (this.utils.isNotFoundError(error)) {
-          await feedWriter.upload(stamp, userRef.reference, { index: 0 });
+      console.log("this.gateway (r): ", this.gateway)
+      if (this.gateway.length > 0) {
+        console.log("gateway mode")
+        // Gateway-mode
+        const result = this.utils.sendMessageToGsoc(
+          this.bee.url,
+          stamp as BatchId,
+          topic,
+          this.gsocResourceId,
+          JSON.stringify(newUser)
+        );
+        console.log("SOC: ", result)
+      } else { console.log("not gateway mode")
+        // Not in gateway-mode
+        const uploadObject: UsersFeedCommit = {
+          users: [newUser],
+          overwrite: false
+        }
+  
+        const userRef = await this.utils.uploadObjectToBee(this.bee, uploadObject, stamp as any);
+        if (!userRef) throw new Error('Could not upload user to bee');
+  
+        const feedWriter = this.utils.graffitiFeedWriterFromTopic(this.bee, topic);
+  
+        try {
+          await feedWriter.upload(stamp, userRef.reference);
+        } catch (error) {
+          if (this.utils.isNotFoundError(error)) {
+            await feedWriter.upload(stamp, userRef.reference, { index: 0 });
+          }
         }
       }
     } catch (error) {
@@ -804,8 +814,24 @@ export class SwarmChat {
 
 const x = new SwarmChat({url: "http://161.97.125.121:2433"})
 
-x.initChatRoom(
-  "hello_gsoc", 
-  "8e4904c266f679c5392a5063d2196102f71768d8bec763084147ba64e2ef14c8" as BatchId,
-  "86d2154575a43f3bf9922d9c52f0a63daca1cf352d57ef2b5027e38bc8d8f272"
-)
+async function test() {
+  await x.initChatRoom(
+    "hello_gsoc", 
+    "8e4904c266f679c5392a5063d2196102f71768d8bec763084147ba64e2ef14c8" as BatchId,
+    "86d2154575a43f3bf9922d9c52f0a63daca1cf352d57ef2b5027e38bc8d8f272"
+  )
+  
+  
+  const w = ethers.Wallet.createRandom()
+  await x.registerUser(
+    "hello_gsoc",
+    {
+      nickName: "Peter",
+      participant: w.address as EthAddress,
+      key: w.privateKey,
+      stamp: "8e4904c266f679c5392a5063d2196102f71768d8bec763084147ba64e2ef14c8" as BatchId,
+    }
+  )
+}
+
+test();
