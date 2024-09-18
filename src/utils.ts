@@ -382,7 +382,7 @@ export class SwarmChatUtils {
     }
   }
 
-  async subscribeToGsoc(url: string, stamp: BatchId, topic: string, resourceId: HexString<number>) {
+  async subscribeToGsoc(url: string, stamp: BatchId, topic: string, resourceId: HexString<number>, callback: (topic: string, stamp: BatchId, gsocMessage: string) => void) {
     try {
       if (!resourceId) throw "ResourceID was not provided!";
 
@@ -390,12 +390,20 @@ export class SwarmChatUtils {
         postageBatchId: stamp,
         consensus: {
           id: `SwarmDecentralizedChat::${topic}`,
-          assertRecord: (input) => { return true },
+          assertRecord: (rawText) => {
+            const receivedObject = JSON.parse(rawText as unknown as string);
+            const isValid = this.validateUserObject(receivedObject)
+            return isValid
+          },
         },
       });
 
       const gsocSub = informationSignal.subscribe({
-          onMessage: (msg: string) => console.log('my-life-event', msg), 
+          onMessage: (msg: string) => {
+            console.log('Registration object received, calling userRegisteredThroughGsoc');
+            console.log("gsoc message: ", msg)
+            callback(topic, stamp, msg);
+          }, 
           onError: console.log
         },
         resourceId
@@ -425,12 +433,7 @@ export class SwarmChatUtils {
         },
       });
 
-      const uploadedSoc = await informationSignal.write(JSON.stringify({ 
-          text: message, 
-          timestamp: Date.now()
-        }),
-        resourceId
-      );
+      const uploadedSoc = await informationSignal.write(message, resourceId);
 
       return uploadedSoc;
 

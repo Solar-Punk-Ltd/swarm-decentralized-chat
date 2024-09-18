@@ -163,7 +163,8 @@ export class SwarmChat {
           this.bee.url,
           stamp,
           topic,
-          this.gsocResourceId
+          this.gsocResourceId,
+          this.userRegisteredThroughGsoc.bind(this)
         );
       }
 
@@ -579,6 +580,32 @@ export class SwarmChat {
     }
   }
 
+  private userRegisteredThroughGsoc(topic: string, stamp: BatchId, gsocMessage: string) {
+    try {
+      // Validation happens in subscribeToGsoc
+      const user: UserWithIndex = {
+        ...JSON.parse(gsocMessage) as unknown as User,
+        index: -1
+      };
+      console.log("this.users: ", this.users)
+      let newList = [...this.users, user];
+      this.utils.removeDuplicateUsers(newList);
+
+      this.writeUsersFeedCommit(
+        topic,
+        stamp,
+        newList
+      );
+
+    } catch (error) {
+      this.handleError({
+        error: error as unknown as Error,
+        context: `userRegisteredThroughGsoc`,
+        throw: false
+      });
+    }
+  }
+
   // Goes through the users object, and enqueues a readMessage for each assumably active user
   private readMessagesForAll(topic: string) {
     return async () => {
@@ -826,6 +853,9 @@ async function test() {
     "86d2154575a43f3bf9922d9c52f0a63daca1cf352d57ef2b5027e38bc8d8f272"
   )
   
+  const { on } = x.getChatActions();
+  x.startMessageFetchProcess("hello_gsoc")
+  x.startUserFetchProcess("hello_gsoc")
   
   const w = ethers.Wallet.createRandom()
   await x.registerUser(
