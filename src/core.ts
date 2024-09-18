@@ -587,15 +587,18 @@ export class SwarmChat {
         ...JSON.parse(gsocMessage) as unknown as User,
         index: -1
       };
-      console.log("this.users: ", this.users)
-      let newList = [...this.users, user];
-      this.utils.removeDuplicateUsers(newList);
 
-      this.writeUsersFeedCommit(
-        topic,
-        stamp,
-        newList
-      );
+      if (!this.isRegistered(user.address)) {
+        console.log("this.users: ", this.users)
+        let newList = [...this.users, user];
+        //this.utils.removeDuplicateUsers(newList);
+  
+        this.writeUsersFeedCommit(
+          topic,
+          stamp,
+          newList
+        );
+      }
 
     } catch (error) {
       this.handleError({
@@ -849,7 +852,7 @@ const x = new SwarmChat({url: "http://161.97.125.121:2433"})
 async function test() {
   await x.initChatRoom(
     "hello_gsoc", 
-    "8e4904c266f679c5392a5063d2196102f71768d8bec763084147ba64e2ef14c8" as BatchId,
+    "5596455deee29df5dc2644ecfc6afb147d7382e07c550e9b10d30ea20b88fcc7" as BatchId,
     "86d2154575a43f3bf9922d9c52f0a63daca1cf352d57ef2b5027e38bc8d8f272"
   )
   
@@ -864,7 +867,7 @@ async function test() {
       nickName: "Peter",
       participant: w.address as EthAddress,
       key: w.privateKey,
-      stamp: "8e4904c266f679c5392a5063d2196102f71768d8bec763084147ba64e2ef14c8" as BatchId,
+      stamp: "5596455deee29df5dc2644ecfc6afb147d7382e07c550e9b10d30ea20b88fcc7" as BatchId,
     }
   )
 }
