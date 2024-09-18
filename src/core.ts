@@ -113,13 +113,6 @@ export class SwarmChat {
     this.usersQueue = new AsyncQueue({ waitable: true, max: 1 }, this.handleError.bind(this), this.logger);
     this.messagesQueue = new AsyncQueue({ waitable: true, max: 4 }, this.handleError.bind(this), this.logger);
     this.reqTimeAvg = new RunningAverage(1000, this.logger);
-
-    // The GSOC Test
-    this.utils.gsocTest(
-      this.bee.url,
-      "8e4904c266f679c5392a5063d2196102f71768d8bec763084147ba64e2ef14c8" as BatchId,
-      "86d2154575a43f3bf9922d9c52f0a63daca1cf352d57ef2b5027e38bc8d8f272"
-    );
   }
 
   /** With getChatActions, it's possible to listen to events on front end or anywhere outside the library. 
@@ -141,10 +134,36 @@ export class SwarmChat {
   }
 
   /** Creates the Users feed, which is necesarry for user registration, and to handle idle users. This will create a new chat room. */
-  public async initChatRoom(topic: string, stamp: BatchId) {
+  public async initChatRoom(topic: string, stamp: BatchId, gateway?: string) {
     try {
       const { consensusHash, graffitiSigner } = this.utils.generateGraffitiFeedMetadata(topic);
       await this.bee.createFeedManifest(stamp, 'sequence', consensusHash, graffitiSigner.address);
+
+      // The GSOC Test
+      const resourceId = await this.utils.mineResourceId(
+        this.bee.url,
+        stamp,
+        "86d2154575a43f3bf9922d9c52f0a63daca1cf352d57ef2b5027e38bc8d8f272",
+        topic
+      );
+      if (!resourceId) throw "Could not create resource ID!";
+
+      const gsocSub = await this.utils.subscribeToGsoc(
+        this.bee.url,
+        stamp,
+        topic,
+        resourceId
+      );
+
+      const uploadedSoc = await this.utils.sendMessageToGsoc(
+        this.bee.url,
+        stamp,
+        topic,
+        resourceId,
+        "Hello world!"
+      );
+
+
       // TODO GSOC - a Registration feed also needs to be created, when in Gateway mode.
       // TODO GSOC - topic also needs to determine the Registration feed
 
@@ -777,3 +796,4 @@ export class SwarmChat {
 
 
 const x = new SwarmChat({url: "http://161.97.125.121:2433"})
+x.initChatRoom("hello_gsoc", "8e4904c266f679c5392a5063d2196102f71768d8bec763084147ba64e2ef14c8" as BatchId,)

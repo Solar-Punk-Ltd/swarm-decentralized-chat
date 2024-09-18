@@ -6,6 +6,7 @@ import { BatchId, Bee, BeeRequestOptions, FeedReader, Signer, UploadResult, Util
 import { Bytes, ErrorObject, EthAddress, IdleMs, MessageData, PrefixedHexString, Sha3Message, User, UserActivity, UsersFeedCommit, UserWithIndex } from './types';
 import { CONSENSUS_ID, EVENTS, HEX_RADIX } from './constants';
 import { HexString } from '@anythread/gsoc/dist/types';
+import { SingleOwnerChunk } from '@anythread/gsoc/dist/soc';
 
 export class SwarmChatUtils {
   private handleError: (errObject: ErrorObject) => void;
@@ -379,18 +380,86 @@ export class SwarmChatUtils {
     const uploadedSoc = await informationSignal.write(JSON.stringify({ text: 'Hello there!', timestamp: Date.now() }), resourceId);
   }
 
-  async mineResourceId(url: string, stamp: BatchId, gateway: string, topic: string): HexString<number> {
+  async mineResourceId(url: string, stamp: BatchId, gateway: string, topic: string): Promise<HexString<number> | null>{
     try {
-      
+      const informationSignal = new InformationSignal(url, {
+        postageBatchId: stamp,
+        consensus: {
+          id: `SwarmDecentralizedChat::${topic}`,
+          assertRecord: (input) => { return true },
+        },
+      });
+
+      const mineResult = informationSignal.mineResourceID(this.hexToBytes(gateway), 11);
+
+      return this.bytesToHex(mineResult.resourceId);
+
     } catch (error) {
       this.handleError({
         error: error as unknown as Error,
         context: `mineResourceId`,
         throw: true
       });
+      return null;
     }
   }
 
+  async subscribeToGsoc(url: string, stamp: BatchId, topic: string, resourceId: HexString<number>) {
+    try {
+      const informationSignal = new InformationSignal(url, {
+        postageBatchId: stamp,
+        consensus: {
+          id: `SwarmDecentralizedChat::${topic}`,
+          assertRecord: (input) => { return true },
+        },
+      });
+
+      const gsocSub = informationSignal.subscribe({
+          onMessage: (msg: string) => console.log('my-life-event', msg), 
+          onError: console.log
+        },
+        resourceId
+      );
+
+      return gsocSub;
+
+    } catch (error) {
+      this.handleError({
+        error: error as unknown as Error,
+        context: `subscribeToGSOC`,
+        throw: true
+      });
+      return null;
+    }
+  }
+
+  async sendMessageToGsoc(url: string, stamp: BatchId, topic: string, resourceId: HexString<number>, message: string): Promise<SingleOwnerChunk | undefined> {
+    try {
+      const informationSignal = new InformationSignal(url, {
+        postageBatchId: stamp,
+        consensus: {
+          id: `SwarmDecentralizedChat::${topic}`,
+          assertRecord: (input) => { return true },
+        },
+      });
+
+      const uploadedSoc = await informationSignal.write(JSON.stringify({ 
+          text: message, 
+          timestamp: Date.now()
+        }),
+        resourceId
+      );
+
+      return uploadedSoc;
+
+    } catch (error) {
+      this.handleError({
+        error: error as unknown as Error,
+        context: `sendMessageToGSOC`,
+        throw: false
+      });
+    }
+  }
 }
 
 // Calculates and stores average, used for request time averaging
