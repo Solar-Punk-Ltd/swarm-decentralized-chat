@@ -48,7 +48,6 @@ export class SwarmChat {
 
   /** Actual variables, like Bee instance, messages, analytics, user list, etc */
   private bee = new Bee('http://localhost:1633');
-  // TODO GSOC - we need an isGateway variable
   private emitter = new EventEmitter();
   private messages: MessageData[] = [];
   private reqTimeAvg;
@@ -58,9 +57,9 @@ export class SwarmChat {
   private usersLoading = false;
   private usersFeedIndex: number = 0;                                       // Will be overwritten on user-side, by initUsers
   private ownIndex: number = -2;
-  private gateway: string = "";                                             // If this is true (exists), we are in gateway-mode. This is the overlay address of the gateway
-  private gsocResourceId: HexString<number> = "";                           // ResourceID for the GSOC feed. This was mined. (only in gateway-mode)
-  private gsocSubscribtion: GsocSubscribtion | null = null;                 // The GSOC subscribtion, only gateway has this. If this is not null, you are the Gateway (only in gateway-mode)
+  private gateway: string = "";                                             // If this is true (exists), we are in gateway mode. This is the overlay address of the gateway
+  private gsocResourceId: HexString<number> = "";                           // ResourceID for the GSOC feed. This was mined. (only in gateway mode)
+  private gsocSubscribtion: GsocSubscribtion | null = null;                 // The GSOC subscribtion, only gateway has this. If this is not null, you are the Gateway (only in gateway mode)
   private removeIdleUsersInterval: NodeJS.Timeout | null = null;            // Streamer-side interval, for idle user removing
   private userFetchClock: NodeJS.Timeout | null = null;                     // User-side interval, for user fetching (object created by setInterval)
   private messageFetchClock: NodeJS.Timeout | null = null;                  // User-side interval, for message fetching (object created by setInterval)
@@ -148,7 +147,6 @@ export class SwarmChat {
 
       if (gateway) {
         this.gateway = gateway;
-        console.log("this.gateway: ", this.gateway)
 
         // Mine Resource ID for GSOC (will send message to specific neighborhood)
         const resourceId = await this.utils.mineResourceId(
@@ -227,13 +225,14 @@ export class SwarmChat {
         let usersFeedCommit = await this.utils.fetchUsersFeedAtIndex(this.bee, feedReader, i) as unknown as UsersFeedCommit;
         let validUsers = usersFeedCommit.users.filter((user) => this.utils.validateUserObject(user));
 
-        // TODO GSOC - Users feed will not contain registration entries, and Gateway will write it.
         if (usersFeedCommit.overwrite) {                             // They will have index that was already written to the object by Activity Analysis writer
           const usersBatch: UserWithIndex[] = validUsers as unknown as UserWithIndex[];
           aggregatedList = [...aggregatedList, ...usersBatch];
 
           const thresholdTime = Date.now() - 60 * 1000;              // Threshold is 1 minute
           let lastTimestamp = Date.now();
+
+          if (this.gateway) break;                                   // This feed is not used for registration
 
           // Registration that is not on aggregated list yet
           do {
@@ -257,6 +256,7 @@ export class SwarmChat {
           
           break;
         } else {
+          if (this.gateway) break;                                   // This feed is not used for registration in gateway mode, so this is spam.
 
           const newUser =  { 
             ...validUsers[0], 
@@ -301,8 +301,12 @@ export class SwarmChat {
         throw new Error('The provided address does not match the address derived from the private key');
       }
 
-      // TODO GSOC - not every user is doing activity analysis. Only Gateway.
-      this.startActivityAnalyzes(topic, address, stamp as BatchId);                  // Every User is doing Activity Analysis, and one of them is selected to write the UsersFeed
+      if (this.gateway) {
+        if (this.gsocSubscribtion)                                                     // Only the Gateway is doing Activity Analysis (removeIdleUsers is called by this function)
+          this.startActivityAnalyzes(topic, address, stamp as BatchId);
+      } else {
+        this.startActivityAnalyzes(topic, address, stamp as BatchId);                  // Every User is doing Activity Analysis (when not in gateway mode), and one of them is selected to write the UsersFeed
+      }
 
       const alreadyRegistered = this.users.find((user) => user.address === participant);
 
@@ -327,21 +331,19 @@ export class SwarmChat {
         throw new Error('User object validation failed');
       }
 
-      // TODO GSOC - upload the User object to a Registration feed, that is monitored by Gateway
-      console.log("this.gateway (r): ", this.gateway)
-      if (this.gateway.length > 0) {
-        console.log("gateway mode")
-        // Gateway-mode
-        const result = this.utils.sendMessageToGsoc(
+      if (this.gateway) {         // Gateway mode
+        
+        const result = await this.utils.sendMessageToGsoc(
           this.bee.url,
           stamp as BatchId,
           topic,
           this.gsocResourceId,
           JSON.stringify(newUser)
         );
-        console.log("SOC: ", result)
-      } else { console.log("not gateway mode")
-        // Not in gateway-mode
+
+        if (!result?.payload.length) throw "Error writing User object to GSOC!";
+      } else {                    // Not in gateway mode
+        
         const uploadObject: UsersFeedCommit = {
           users: [newUser],
           overwrite: false
@@ -464,8 +466,12 @@ export class SwarmChat {
         return;
       }
 
-      // TODO GSOC - we don't select user, if this function is running, then you are the Gateway
-      const selectedUser = this.utils.selectUsersFeedCommitWriter(activeUsers, this.emitStateEvent.bind(this));
+      let selectedUser: EthAddress;
+      if (this.gateway) {                                         // If in gateway mode, the Gateway is always doing the Users feed writing
+        selectedUser = ownAddress;                                // removeIdleUsers wouldn't run, if you wouldn't be the Gateway (when in gateway mode)
+      } else {
+        selectedUser = this.utils.selectUsersFeedCommitWriter(activeUsers, this.emitStateEvent.bind(this));
+      }
 
       if (selectedUser === ownAddress) {
         await this.writeUsersFeedCommit(topic, stamp, activeUsers);
@@ -485,7 +491,6 @@ export class SwarmChat {
 
   // Write a UsersFeedCommit to the Users feed, which might remove some inactive users from the readMessagesForAll loop
   private async writeUsersFeedCommit(topic: string, stamp: BatchId, activeUsers: UserWithIndex[]) {
-    // TODO GSOC - If this function is running, then you are the Gateway (but try to think to the future as well, this might be conditional)
     try {
       this.logger.info("The user was selected for submitting the UsersFeedCommit! (removeIdleUsers)");
       const uploadObject: UsersFeedCommit = {
@@ -629,7 +634,7 @@ export class SwarmChat {
       if (messageData.timestamp + this.IDLE_TIME*2 > Date.now()) {
         this.messages.push(messageData);
         
-        // TODO GSOC - this needs to be conditional, only Gateway is doing this.
+        // TODO GSOC - this needs to be conditional, only Gateway is doing this. It's not a problem if other users are doing it as well, but has no significance
         // Update userActivityTable
         this.updateUserActivityAtNewMessage(messageData);
 
