@@ -588,6 +588,7 @@ export class SwarmChat {
         index: -1
       };
 
+      console.log("isRegistered: ", this.isRegistered(user.address))
       if (!this.isRegistered(user.address)) {
         console.log("this.users: ", this.users)
         let newList = [...this.users, user];
@@ -847,20 +848,27 @@ export class SwarmChat {
 
 
 
-const x = new SwarmChat({url: "http://161.97.125.121:2433"})
+const x = new SwarmChat({url: "http://161.97.125.121:2433", idleTime: (60*60*1000)})
 
-async function test() {
+async function host() {
+  const isNode = typeof window === 'undefined' && typeof global !== 'undefined';
+  if (!isNode) return;
+  
   await x.initChatRoom(
-    "hello_gsoc", 
+    "gsoc-2", 
     "5596455deee29df5dc2644ecfc6afb147d7382e07c550e9b10d30ea20b88fcc7" as BatchId,
     "86d2154575a43f3bf9922d9c52f0a63daca1cf352d57ef2b5027e38bc8d8f272"
   )
   
-  const { on } = x.getChatActions();
-  x.startMessageFetchProcess("hello_gsoc")
-  x.startUserFetchProcess("hello_gsoc")
+  x.startMessageFetchProcess("gsoc-2")
+  x.startUserFetchProcess("gsoc-2")
   
-  const w = ethers.Wallet.createRandom()
+  do {
+    console.log(`${Date.now()}   Still running...`);
+    await sleep(5000);
+  } while (true)
+
+  /*const w = ethers.Wallet.createRandom()
   await x.registerUser(
     "hello_gsoc",
     {
@@ -869,7 +877,7 @@ async function test() {
       key: w.privateKey,
       stamp: "5596455deee29df5dc2644ecfc6afb147d7382e07c550e9b10d30ea20b88fcc7" as BatchId,
     }
-  )
+  )*/
 }
 
-test();
+host();
