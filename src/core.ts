@@ -87,6 +87,7 @@ export class SwarmChat {
   // Constructor, static variables will get value here
   constructor(settings: ChatSettings = {}, beeInstance?: Bee, eventEmitter?: EventEmitter) {
     this.bee = this.bee = beeInstance || new Bee(settings.url || 'http://localhost:1633');
+    this.gateway = settings.gateway || "";
     this.emitter = eventEmitter || new EventEmitter();
     
     this.USERS_FEED_TIMEOUT = settings.usersFeedTimeout || 8 * SECOND;                      // Can adjust UsersFeedCommit write timeout, but higher values might cause SocketHangUp in Bee
@@ -138,25 +139,24 @@ export class SwarmChat {
   }
 
   /** Creates the Users feed, which is necesarry for user registration, and to handle idle users. This will create a new chat room. */
-  public async initChatRoom(topic: string, stamp: BatchId, gateway?: string) {
+  public async initChatRoom(topic: string, stamp: BatchId/*, gateway?: string*/) {
     try {
       // Create Users feed
       const { consensusHash, graffitiSigner } = this.utils.generateGraffitiFeedMetadata(topic);
       await this.bee.createFeedManifest(stamp, 'sequence', consensusHash, graffitiSigner.address);
 
 
-      if (gateway) {
-        this.gateway = gateway;
-
+      if (this.gateway) {
         // Mine Resource ID for GSOC (will send message to specific neighborhood)
         const resourceId = await this.utils.mineResourceId(
           this.bee.url,
           stamp,
-          gateway,
+          this.gateway,
           topic
         );
         if (!resourceId) throw "Could not create resource ID!";
         else this.gsocResourceId = resourceId;
+        console.log("resource ID: ", resourceId)
   
         // Subscribe to the GSOC feed
         this.gsocSubscribtion = await this.utils.subscribeToGsoc(
@@ -303,9 +303,14 @@ export class SwarmChat {
       }
 
       if (this.gateway) {
-        if (this.gsocSubscribtion)                                                     // Only the Gateway is doing Activity Analysis (removeIdleUsers is called by this function)
+        if (this.gsocSubscribtion) {                                                   // Only the Gateway is doing Activity Analysis (removeIdleUsers is called by this function)
           this.startActivityAnalyzes(topic, address, stamp as BatchId);
+          console.log("You are the Gateway")
+        } else {
+          console.log("You are not the Gateway")
+        }
       } else {
+        console.log("THIS ABOLUTELY SHOULDN'T RUN")
         this.startActivityAnalyzes(topic, address, stamp as BatchId);                  // Every User is doing Activity Analysis (when not in gateway mode), and one of them is selected to write the UsersFeed
       }
 
@@ -333,7 +338,7 @@ export class SwarmChat {
       }
 
       if (this.gateway) {         // Gateway mode
-        
+    console.log("sending message to gsoc")    
         const result = await this.utils.sendMessageToGsoc(
           this.bee.url,
           stamp as BatchId,
@@ -344,7 +349,7 @@ export class SwarmChat {
 
         if (!result?.payload.length) throw "Error writing User object to GSOC!";
       } else {                    // Not in gateway mode
-        
+        console.log("THIS ABOLUTELY SHOULDN'T RUN")
         const uploadObject: UsersFeedCommit = {
           users: [newUser],
           overwrite: false
@@ -458,6 +463,7 @@ export class SwarmChat {
       this.removeIdleIsRunning = true;
       
       const activeUsers = this.utils.getActiveUsers(this.users, this.userActivityTable, this.IDLE_TIME, this.USER_LIMIT);
+    console.log("activeUsers: ", activeUsers)
 
       if (activeUsers.length === 0) {
         this.logger.info("There are no active users, Activity Analysis will continue when a user registers.");
@@ -504,7 +510,9 @@ export class SwarmChat {
       const feedWriter = this.utils.graffitiFeedWriterFromTopic(this.bee, topic, { timeout: this.USERS_FEED_TIMEOUT });
 
       await feedWriter.upload(stamp, userRef.reference);
-      this.logger.debug("Upload was successful!")    
+      this.logger.debug("Upload was successful!");
+
+      if (this.gateway) this.users = activeUsers;
 
     } catch (error) {
       this.handleError({
@@ -535,6 +543,7 @@ export class SwarmChat {
       });
       const objectFromFeed = data.json() as unknown as UsersFeedCommit;
       this.logger.debug(`New UsersFeedCommit received!  ${objectFromFeed}`)
+    console.log("New UsersFeedCommit received!",  objectFromFeed)
     
       const validUsers = objectFromFeed.users.filter((user) => this.utils.validateUserObject(user));
 
@@ -555,8 +564,10 @@ export class SwarmChat {
         this.newlyResigeredUsers = [];
       }
     
-      await this.setUsers(this.utils.removeDuplicateUsers(newUsers));
-      this.usersFeedIndex++;                                                                       // We assume that download was successful. Next time we are checking next index.
+      if (!this.gateway) {
+        await this.setUsers(this.utils.removeDuplicateUsers(newUsers));
+        this.usersFeedIndex++;                                                                       // We assume that download was successful. Next time we are checking next index.
+      }
     
       // update userActivityTable
       this.updateUserActivityAtRegistration();
@@ -848,36 +859,41 @@ export class SwarmChat {
 
 
 
-const x = new SwarmChat({url: "http://161.97.125.121:2433", idleTime: (60*60*1000)})
 
 async function host() {
   const isNode = typeof window === 'undefined' && typeof global !== 'undefined';
   if (!isNode) return;
   
+  const x = new SwarmChat({
+    url: "http://161.97.125.121:2433", 
+    idleTime: (60*60*1000),
+    gateway: "86d2154575a43f3bf9922d9c52f0a63daca1cf352d57ef2b5027e38bc8d8f272"
+  })
+  const roomTopic = "gsoc-5"
+  
   await x.initChatRoom(
-    "gsoc-2", 
-    "5596455deee29df5dc2644ecfc6afb147d7382e07c550e9b10d30ea20b88fcc7" as BatchId,
-    "86d2154575a43f3bf9922d9c52f0a63daca1cf352d57ef2b5027e38bc8d8f272"
+    roomTopic, 
+    "5596455deee29df5dc2644ecfc6afb147d7382e07c550e9b10d30ea20b88fcc7" as BatchId
   )
   
-  x.startMessageFetchProcess("gsoc-2")
-  x.startUserFetchProcess("gsoc-2")
-  
-  do {
-    console.log(`${Date.now()}   Still running...`);
-    await sleep(5000);
-  } while (true)
-
-  /*const w = ethers.Wallet.createRandom()
+  const w = ethers.Wallet.createRandom()
   await x.registerUser(
-    "hello_gsoc",
+    roomTopic,
     {
-      nickName: "Peter",
+      nickName: "Gateway",
       participant: w.address as EthAddress,
       key: w.privateKey,
       stamp: "5596455deee29df5dc2644ecfc6afb147d7382e07c550e9b10d30ea20b88fcc7" as BatchId,
     }
-  )*/
+  )
+
+  x.startMessageFetchProcess(roomTopic)
+  x.startUserFetchProcess(roomTopic)
+  
+  do {
+    await sleep(5000);
+  } while (true)
+
 }
 
 host();

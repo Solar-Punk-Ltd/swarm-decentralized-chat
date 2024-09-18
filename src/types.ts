@@ -83,6 +83,7 @@ export type Sha3Message = string | number[] | ArrayBuffer | Uint8Array;
 // SwarmChat settings (for constructor)
 export interface ChatSettings {
     url?: string;                               // Bee url with port
+    gateway?: string;                           // If exists, SwarmChat will run in gateway mode
     usersFeedTimeout?: number;                  // ms
     removeInactiveInterval?: number;            // ms
     idleTime?: number;                          // ms
