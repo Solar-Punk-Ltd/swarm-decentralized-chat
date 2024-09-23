@@ -69,12 +69,8 @@ export class SwarmChat {
   private userActivityTable: UserActivity = {};                             // Used to remove inactive users
   private newlyResigeredUsers: UserWithIndex[] = [];                        // keep track of fresh users
   private reqCount = 0;                                                     // Diagnostics only
-  private prettyStream = pinoPretty({                                       // Colorizing capability for logger
-    colorize: true,
-    translateTime: 'SYS:standard',
-    ignore: "pid,hostname"
-  });
-  private logger = pino(this.prettyStream);                                 // Logger. Levels: "fatal" | "error" | "warn" | "info" | "debug" | "trace" | "silent"
+  //private prettyStream = null;
+  private logger = pino(/*this.prettyStream*/);                                 // Logger. Levels: "fatal" | "error" | "warn" | "info" | "debug" | "trace" | "silent"
   private utils: SwarmChatUtils;
   
   
@@ -108,12 +104,18 @@ export class SwarmChat {
     this.MESSAGE_FETCH_MAX = settings.messageFetchMax || 8 * SECOND;                        // Highest possible value for message fetch interval
     this.F_STEP = settings.fStep || 100;                                                    // When interval is changed, it is changed by this value
     
+    const prettier = settings.prettier ? pinoPretty({                                       // Colorizing capability for logger
+      colorize: true,
+      translateTime: 'SYS:standard',
+      ignore: "pid,hostname"
+    }) : undefined;
+
     this.logger = pino({                                                                    // Logger can be set to "fatal" | "error" | "warn" | "info" | "debug" | "trace" | "silent"
       level: settings.logLevel || "warn",
       browser: {                                                                            // This is necesarry for browser compatibility
         asObject: true
       }
-    }, this.prettyStream);          
+    }, prettier);
 
     this.utils = new SwarmChatUtils(this.handleError.bind(this), this.logger);              // Initialize chat utils
     this.usersQueue = new AsyncQueue({ waitable: true, max: 1 }, this.handleError.bind(this), this.logger);

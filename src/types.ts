@@ -1,5 +1,6 @@
 import { Signature } from "ethers";
 import { ETH_ADDRESS_LENGTH } from "./constants";
+import { PrettyStream } from "pino-pretty";
 
 // Needed for EthAddress
 type FlavoredType<Type, Name> = Type & {
@@ -85,6 +86,7 @@ export interface ChatSettings {
     url?: string;                               // Bee url with port
     gateway?: string;                           // Overlay address of the gateway
     gsocResourceId?: HexString<number>;         // this is a string
+    prettier?: boolean                          // enable prettier lib
     usersFeedTimeout?: number;                  // ms
     removeInactiveInterval?: number;            // ms
     idleTime?: number;                          // ms
