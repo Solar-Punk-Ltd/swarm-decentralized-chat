@@ -21,7 +21,7 @@ import {
 } from './types';
 
 import { EVENTS, HEX_RADIX, MINUTE, SECOND } from './constants';
-import { HexString } from '@anythread/gsoc/dist/types';
+import { HexString } from 'solarpunk-gsoc/dist/types';
 
 
 /**

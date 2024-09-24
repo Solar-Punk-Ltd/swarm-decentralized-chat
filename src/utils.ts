@@ -1,12 +1,12 @@
 import { ethers, BytesLike, utils, Wallet } from 'ethers';
-import { InformationSignal } from '@anythread/gsoc';
+import { InformationSignal } from 'solarpunk-gsoc';
 import * as crypto from 'crypto';
 import pino from 'pino';
 import { BatchId, Bee, BeeRequestOptions, FeedReader, Signer, UploadResult, Utils } from '@ethersphere/bee-js';
 import { Bytes, ErrorObject, EthAddress, IdleMs, MessageData, PrefixedHexString, Sha3Message, User, UserActivity, UsersFeedCommit, UserWithIndex } from './types';
 import { CONSENSUS_ID, EVENTS, HEX_RADIX } from './constants';
-import { HexString } from '@anythread/gsoc/dist/types';
-import { SingleOwnerChunk } from '@anythread/gsoc/dist/soc';
+import { HexString } from 'solarpunk-gsoc/dist/types';
+import { SingleOwnerChunk } from 'solarpunk-gsoc/dist/soc';
 
 export class SwarmChatUtils {
   private handleError: (errObject: ErrorObject) => void;
@@ -365,7 +365,7 @@ export class SwarmChatUtils {
         },
       });
 
-      const mineResult = informationSignal.mineResourceID(this.hexToBytes(gateway), 11);
+      const mineResult = informationSignal.mineResourceId(this.hexToBytes(gateway), 11);
 
       return this.bytesToHex(mineResult.resourceId);
 

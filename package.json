@@ -1,6 +1,6 @@
 {
-    "name": "swarm-decentralized-chat",
-    "version": "0.0.1",
+    "name": "solarpunk-swarm-decentralized-chat",
+    "version": "0.0.2",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
     "exports": {
@@ -18,11 +18,12 @@
         "build": "tsc"
     },
     "dependencies": {
+        "solarpunk-gsoc": "0.0.1",
         "@ethersphere/bee-js": "^6.9.1",
         "ethers": "^5.7.2",
         "pino": "^9.3.2",
         "pino-pretty": "^11.2.2",
-        "@anythread/gsoc": "file:../gsoc"
+        "remove": "^0.1.5"
     },
     "devDependencies": {
         "@types/lodash": "^4.17.7",
