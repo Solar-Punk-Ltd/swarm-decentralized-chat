@@ -1,6 +1,5 @@
 import pino from "pino";
-import { FIRST_SEGMENT_INDEX } from "./constants";
-import { incrementHexString, sleep } from "./utils";
+import { FIRST_SEGMENT_INDEX, HEX_RADIX } from "./constants";
 import { ErrorObject } from "./types";
 
 // A promise queue, that will keep a specified max parallel request count
@@ -50,7 +49,7 @@ export class AsyncQueue {
       if (this.waitable) {
         try {
           await action();
-          this.index = incrementHexString(this.index);
+          this.index = this.incrementHexString(this.index);
         } catch (error) {
           this.handleError({
             error: error as unknown as Error,
@@ -63,7 +62,7 @@ export class AsyncQueue {
       } else {
         action()
           .then(() => {
-            this.index = incrementHexString(this.index);
+            this.index = this.incrementHexString(this.index);
           })
           .catch((error) => {
             this.handleError({
@@ -107,7 +106,7 @@ export class AsyncQueue {
   async clearQueue() {
     this.queue = [];
     while (this.isProcessing || this.inProgressCount > 0) {
-      await sleep(this.clearWaitTime);
+      await this.sleep(this.clearWaitTime);
     }
   }
 
@@ -118,7 +117,7 @@ export class AsyncQueue {
     this.isWaiting = true;
 
     while (this.isProcessing || this.inProgressCount > 0) {
-      await sleep(this.clearWaitTime);
+      await this.sleep(this.clearWaitTime);
     }
 
     this.isWaiting = false;
@@ -126,5 +125,18 @@ export class AsyncQueue {
 
   public getMaxParallel(): number {
     return this.maxParallel;
+  }
+
+  //---Was copied here for AsyncQueue---
+  // TODO: Move the whole AsyncQueue to utils, but in a way, that it stays in this file
+  // Increment hex string, default value is 1
+  incrementHexString(hexString: string, i = 1n) {
+    const num = BigInt('0x' + hexString);
+    return (num + i).toString(HEX_RADIX).padStart(HEX_RADIX, '0');
+  }
+  sleep(delay: number) {
+    return new Promise((resolve) => {
+      setTimeout(resolve, delay);
+    });
   }
 }

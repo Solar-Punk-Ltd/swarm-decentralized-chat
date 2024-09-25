@@ -3,7 +3,7 @@ import { ethers, Signature, Wallet } from 'ethers';
 import pino from 'pino';
 import pinoPretty from 'pino-pretty';
 
-import {  RunningAverage, sleep, SwarmChatUtils } from './utils';
+import {  RunningAverage, SwarmChatUtils } from './utils';
 import { EventEmitter } from './eventEmitter';
 import { AsyncQueue } from './asyncQueue';
 
@@ -855,45 +855,23 @@ export class SwarmChat {
       requestCount: this.reqCount,
     }
   }
+
+  async host(roomTopic: string, stamp: BatchId) {
+    const isNode = typeof window === 'undefined' && typeof global !== 'undefined';
+    if (!isNode) {
+      this.handleError({
+        error: new Error("This function can only be called in Node.js environment"),
+        context: 'host',
+        throw: true
+      });
+    };
+    
+    await this.initChatRoom(roomTopic, stamp);
+    this.startMessageFetchProcess(roomTopic);
+    this.startUserFetchProcess(roomTopic);
+    
+    do {
+      await this.utils.sleep(5000);
+    } while (true)
+  }
 }
-
-
-
-
-async function host() {
-  const isNode = typeof window === 'undefined' && typeof global !== 'undefined';
-  if (!isNode) return;
-  
-  const x = new SwarmChat({
-    url: "http://161.97.125.121:2433", 
-    idleTime: (60*60*1000),
-    gateway: "86d2154575a43f3bf9922d9c52f0a63daca1cf352d57ef2b5027e38bc8d8f272"
-  })
-  const roomTopic = "gsoc-6"
-  
-  await x.initChatRoom(
-    roomTopic, 
-    "5596455deee29df5dc2644ecfc6afb147d7382e07c550e9b10d30ea20b88fcc7" as BatchId
-  )
-  
-  const w = ethers.Wallet.createRandom()
-  await x.registerUser(
-    roomTopic,
-    {
-      nickName: "Gateway",
-      participant: w.address as EthAddress,
-      key: w.privateKey,
-      stamp: "5596455deee29df5dc2644ecfc6afb147d7382e07c550e9b10d30ea20b88fcc7" as BatchId,
-    }
-  )
-
-  x.startMessageFetchProcess(roomTopic)
-  x.startUserFetchProcess(roomTopic)
-  
-  do {
-    await sleep(5000);
-  } while (true)
-
-}
-
-host();

@@ -481,17 +481,3 @@ export class RunningAverage {
     return this.sum / this.values.length;
   }
 }
-
-//---Was copied here for AsyncQueue---
-// Increment hex string, default value is 1
-export function incrementHexString(hexString: string, i = 1n) {
-  const num = BigInt('0x' + hexString);
-  return (num + i).toString(HEX_RADIX).padStart(HEX_RADIX, '0');
-}
-
-// General sleep function, usage: await sleep(ms)
-export function sleep(delay: number) {
-  return new Promise((resolve) => {
-    setTimeout(resolve, delay);
-  });
-}
