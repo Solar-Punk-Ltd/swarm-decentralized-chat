@@ -1,9 +1,12 @@
 import { ethers, BytesLike, utils, Wallet } from 'ethers';
+import { InformationSignal } from 'solarpunk-gsoc';
 import * as crypto from 'crypto';
 import pino from 'pino';
 import { BatchId, Bee, BeeRequestOptions, FeedReader, Signer, UploadResult, Utils } from '@ethersphere/bee-js';
-import { ErrorObject, EthAddress, IdleMs, MessageData, Sha3Message, User, UserActivity, UsersFeedCommit, UserWithIndex } from './types';
+import { Bytes, ErrorObject, EthAddress, IdleMs, MessageData, PrefixedHexString, Sha3Message, User, UserActivity, UsersFeedCommit, UserWithIndex } from './types';
 import { CONSENSUS_ID, EVENTS, HEX_RADIX } from './constants';
+import { HexString } from 'solarpunk-gsoc/dist/types';
+import { SingleOwnerChunk } from 'solarpunk-gsoc/dist/soc';
 
 export class SwarmChatUtils {
   private handleError: (errObject: ErrorObject) => void;
@@ -279,28 +282,165 @@ export class SwarmChatUtils {
 
     for (const rawKey in userActivityTable) {
       const key = rawKey as unknown as EthAddress;
+      if (!userActivityTable[key]) {
+        userActivityTable[key] = {
+          timestamp: now,       // this used to be user.timestamp, but it is possibly causing a bug
+          readFails: 0
+        }
+      }
       idleMs[key] = now - userActivityTable[key].timestamp;
     }
 
     this.logger.debug(`Users inside removeIdle:  ${users}`)
+
     const activeUsers = users.filter((user) => {
-      const userAddr = user.address;
-      if (!userActivityTable[userAddr]) {
-        userActivityTable[userAddr] = {
-          timestamp: Date.now(),  // this used to be user.timestamp, but it is possibly causing a bug
-          readFails: 0
-        }
-        return true;
-      }
-            
-      
-      return idleMs[userAddr] < idleTime;
+      return idleMs[user.address] < idleTime;
     });
 
     // Sort activeUsers by their last activity timestamp (most recent first)
     const sortedActiveUsers = activeUsers.sort((a, b) => userActivityTable[b.address].timestamp - userActivityTable[a.address].timestamp);
 
     return sortedActiveUsers.slice(0, limit);
+  }
+
+  /** GSOC UTILS */
+  private isHexString<Length extends number = number>(s: unknown, len?: number): s is HexString<Length> {
+    return typeof s === 'string' && /^[0-9a-f]+$/i.test(s) && (!len || s.length === len)
+  }
+  private isPrefixedHexString(s: unknown): s is PrefixedHexString {
+    return typeof s === 'string' && /^0x[0-9a-f]+$/i.test(s)
+  }
+  private assertHexString<Length extends number = number>(
+    s: unknown,
+    len?: number,
+    name = 'value',
+  ): asserts s is HexString<Length> {
+    if (!this.isHexString(s, len)) {
+      if (this.isPrefixedHexString(s)) {
+        throw new TypeError(`${name} not valid non prefixed hex string (has 0x prefix): ${s}`)
+      }
+  
+      // Don't display length error if no length specified in order not to confuse user
+      const lengthMsg = len ? ` of length ${len}` : ''
+      throw new TypeError(`${name} not valid hex string${lengthMsg}: ${s}`)
+    }
+  }
+  private hexToBytes<Length extends number, LengthHex extends number = number>(
+    hex: HexString<LengthHex>,
+  ): Bytes<Length> {
+    this.assertHexString(hex)
+  
+    const bytes = new Uint8Array(hex.length / 2)
+    for (let i = 0; i < bytes.length; i++) {
+      const hexByte = hex.substr(i * 2, 2)
+      bytes[i] = parseInt(hexByte, 16)
+    }
+  
+    return bytes as Bytes<Length>
+  }
+  private bytesToHex<Length extends number = number>(bytes: Uint8Array, len?: Length): HexString<Length> {
+    const hexByte = (n: number) => n.toString(16).padStart(2, '0')
+    const hex = Array.from(bytes, hexByte).join('') as HexString<Length>
+  
+    if (len && hex.length !== len) {
+      throw new TypeError(`Resulting HexString does not have expected length ${len}: ${hex}`)
+    }
+  
+    return hex
+  }
+
+  /**
+  * @param url Bee url
+  * @param stamp Valid stamp
+  * @param gateway Overlay address of the gateway
+  * @param topic Topic for the chat
+  */
+  async mineResourceId(url: string, stamp: BatchId, gateway: string, topic: string): Promise<HexString<number> | null>{
+    try {
+      const informationSignal = new InformationSignal(url, {
+        postageBatchId: stamp,
+        consensus: {
+          id: `SwarmDecentralizedChat::${topic}`,
+          assertRecord: (input) => { return true },
+        },
+      });
+
+      const mineResult = informationSignal.mineResourceId(this.hexToBytes(gateway), 11);
+
+      return this.bytesToHex(mineResult.resourceId);
+
+    } catch (error) {
+      this.handleError({
+        error: error as unknown as Error,
+        context: `mineResourceId`,
+        throw: true
+      });
+      return null;
+    }
+  }
+
+  async subscribeToGsoc(url: string, stamp: BatchId, topic: string, resourceId: HexString<number>, callback: (topic: string, stamp: BatchId, gsocMessage: string) => void) {
+    try {
+      if (!resourceId) throw "ResourceID was not provided!";
+
+      const informationSignal = new InformationSignal(url, {
+        postageBatchId: stamp,
+        consensus: {
+          id: `SwarmDecentralizedChat::${topic}`,
+          assertRecord: (rawText) => {
+            const receivedObject = JSON.parse(rawText as unknown as string);
+            const isValid = this.validateUserObject(receivedObject)
+            return isValid
+          },
+        },
+      });
+
+      const gsocSub = informationSignal.subscribe({
+          onMessage: (msg: string) => {
+            console.log('Registration object received, calling userRegisteredThroughGsoc');
+            console.log("gsoc message: ", msg)
+            callback(topic, stamp, msg);
+          }, 
+          onError: console.log
+        },
+        resourceId
+      );
+
+      return gsocSub;
+
+    } catch (error) {
+      this.handleError({
+        error: error as unknown as Error,
+        context: `subscribeToGSOC`,
+        throw: true
+      });
+      return null;
+    }
+  }
+
+  async sendMessageToGsoc(url: string, stamp: BatchId, topic: string, resourceId: HexString<number>, message: string): Promise<SingleOwnerChunk | undefined> {
+    try {
+      if (!resourceId) throw "ResourceID was not provided!";
+
+      const informationSignal = new InformationSignal(url, {
+        postageBatchId: stamp,
+        consensus: {
+          id: `SwarmDecentralizedChat::${topic}`,
+          assertRecord: (input) => { return true },
+        },
+      });
+
+      const uploadedSoc = await informationSignal.write(message, resourceId);
+
+      return uploadedSoc;
+
+    } catch (error) {
+      this.handleError({
+        error: error as unknown as Error,
+        context: `sendMessageToGSOC`,
+        throw: false
+      });
+    }
   }
 }
 

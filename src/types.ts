@@ -1,5 +1,6 @@
 import { Signature } from "ethers";
 import { ETH_ADDRESS_LENGTH } from "./constants";
+import { PrettyStream } from "pino-pretty";
 
 // Needed for EthAddress
 type FlavoredType<Type, Name> = Type & {
@@ -8,6 +9,23 @@ type FlavoredType<Type, Name> = Type & {
 type HexString<Length extends number = number> = FlavoredType<string & {
     readonly length: Length;
 }, 'HexString'>;
+
+// Used for GSOC
+export interface Bytes<Length extends number> extends Uint8Array {
+    readonly length: Length
+}
+/*export type HexString<Length extends number = number> = FlavoredType<
+  string & {
+    readonly length: Length
+  },
+  'HexString'
+>*/
+export type PrefixedHexString = FlavoredType<string, 'PrefixedHexString'>
+
+export interface GsocSubscribtion {
+    close: () => void;
+    gsocAddress: Bytes<32>;
+}
 
 // This is a hex string of specific length (42)
 export type EthAddress = HexString<typeof ETH_ADDRESS_LENGTH>;
@@ -66,6 +84,9 @@ export type Sha3Message = string | number[] | ArrayBuffer | Uint8Array;
 // SwarmChat settings (for constructor)
 export interface ChatSettings {
     url?: string;                               // Bee url with port
+    gateway?: string;                           // Overlay address of the gateway
+    gsocResourceId?: HexString<number>;         // this is a string
+    prettier?: boolean                          // enable prettier lib
     usersFeedTimeout?: number;                  // ms
     removeInactiveInterval?: number;            // ms
     idleTime?: number;                          // ms

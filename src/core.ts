@@ -1,9 +1,9 @@
 import { BatchId, Bee, Reference } from '@ethersphere/bee-js';
-import { ethers, Signature } from 'ethers';
+import { ethers, Signature, Wallet } from 'ethers';
 import pino from 'pino';
 import pinoPretty from 'pino-pretty';
 
-import {  RunningAverage, SwarmChatUtils } from './utils';
+import {  RunningAverage, sleep, SwarmChatUtils } from './utils';
 import { EventEmitter } from './eventEmitter';
 import { AsyncQueue } from './asyncQueue';
 
@@ -11,6 +11,7 @@ import {
   ChatSettings,
   ErrorObject,
   EthAddress, 
+  GsocSubscribtion, 
   MessageData, 
   ParticipantDetails, 
   User, 
@@ -20,6 +21,8 @@ import {
 } from './types';
 
 import { EVENTS, HEX_RADIX, MINUTE, SECOND } from './constants';
+import { HexString } from 'solarpunk-gsoc/dist/types';
+
 
 /**
  * Swarm Decentralized Chat
@@ -54,6 +57,9 @@ export class SwarmChat {
   private usersLoading = false;
   private usersFeedIndex: number = 0;                                       // Will be overwritten on user-side, by initUsers
   private ownIndex: number = -2;
+  private gateway: string = "";                                             // If this is true (exists), we are in gateway mode. This is the overlay address of the gateway
+  private gsocResourceId: HexString<number> = "";                           // ResourceID for the GSOC feed. This was mined. (only in gateway mode)
+  private gsocSubscribtion: GsocSubscribtion | null = null;                 // The GSOC subscribtion, only gateway has this. If this is not null, you are the Gateway (only in gateway mode)
   private removeIdleUsersInterval: NodeJS.Timeout | null = null;            // Streamer-side interval, for idle user removing
   private userFetchClock: NodeJS.Timeout | null = null;                     // User-side interval, for user fetching (object created by setInterval)
   private messageFetchClock: NodeJS.Timeout | null = null;                  // User-side interval, for message fetching (object created by setInterval)
@@ -63,12 +69,8 @@ export class SwarmChat {
   private userActivityTable: UserActivity = {};                             // Used to remove inactive users
   private newlyResigeredUsers: UserWithIndex[] = [];                        // keep track of fresh users
   private reqCount = 0;                                                     // Diagnostics only
-  private prettyStream = pinoPretty({                                       // Colorizing capability for logger
-    colorize: true,
-    translateTime: 'SYS:standard',
-    ignore: "pid,hostname"
-  });
-  private logger = pino(this.prettyStream);                                 // Logger. Levels: "fatal" | "error" | "warn" | "info" | "debug" | "trace" | "silent"
+  //private prettyStream = null;
+  private logger = pino(/*this.prettyStream*/);                                 // Logger. Levels: "fatal" | "error" | "warn" | "info" | "debug" | "trace" | "silent"
   private utils: SwarmChatUtils;
   
   
@@ -81,6 +83,8 @@ export class SwarmChat {
   // Constructor, static variables will get value here
   constructor(settings: ChatSettings = {}, beeInstance?: Bee, eventEmitter?: EventEmitter) {
     this.bee = this.bee = beeInstance || new Bee(settings.url || 'http://localhost:1633');
+    this.gateway = settings.gateway || "";                                                  // If exists, SwarmChat will run in gateway mode
+    this.gsocResourceId = settings.gsocResourceId || "";                                    // When in gateway mode, normal nodes need to provide this
     this.emitter = eventEmitter || new EventEmitter();
     
     this.USERS_FEED_TIMEOUT = settings.usersFeedTimeout || 8 * SECOND;                      // Can adjust UsersFeedCommit write timeout, but higher values might cause SocketHangUp in Bee
@@ -100,12 +104,18 @@ export class SwarmChat {
     this.MESSAGE_FETCH_MAX = settings.messageFetchMax || 8 * SECOND;                        // Highest possible value for message fetch interval
     this.F_STEP = settings.fStep || 100;                                                    // When interval is changed, it is changed by this value
     
+    const prettier = settings.prettier ? pinoPretty({                                       // Colorizing capability for logger
+      colorize: true,
+      translateTime: 'SYS:standard',
+      ignore: "pid,hostname"
+    }) : undefined;
+
     this.logger = pino({                                                                    // Logger can be set to "fatal" | "error" | "warn" | "info" | "debug" | "trace" | "silent"
       level: settings.logLevel || "warn",
       browser: {                                                                            // This is necesarry for browser compatibility
         asObject: true
       }
-    }, this.prettyStream);          
+    }, prettier);
 
     this.utils = new SwarmChatUtils(this.handleError.bind(this), this.logger);              // Initialize chat utils
     this.usersQueue = new AsyncQueue({ waitable: true, max: 1 }, this.handleError.bind(this), this.logger);
@@ -132,10 +142,34 @@ export class SwarmChat {
   }
 
   /** Creates the Users feed, which is necesarry for user registration, and to handle idle users. This will create a new chat room. */
-  public async initChatRoom(topic: string, stamp: BatchId) {
+  public async initChatRoom(topic: string, stamp: BatchId/*, gateway?: string*/) {
     try {
+      // Create Users feed
       const { consensusHash, graffitiSigner } = this.utils.generateGraffitiFeedMetadata(topic);
       await this.bee.createFeedManifest(stamp, 'sequence', consensusHash, graffitiSigner.address);
+
+
+      if (this.gateway) {
+        // Mine Resource ID for GSOC (will send message to specific neighborhood)
+        const resourceId = await this.utils.mineResourceId(
+          this.bee.url,
+          stamp,
+          this.gateway,
+          topic
+        );
+        if (!resourceId) throw "Could not create resource ID!";
+        else this.gsocResourceId = resourceId;
+        console.info("resource ID: ", resourceId)
+  
+        // Subscribe to the GSOC feed
+        this.gsocSubscribtion = await this.utils.subscribeToGsoc(
+          this.bee.url,
+          stamp,
+          topic,
+          this.gsocResourceId,
+          this.userRegisteredThroughGsoc.bind(this)
+        );
+      }
 
     } catch (error) {
       this.handleError({
@@ -202,6 +236,8 @@ export class SwarmChat {
           const thresholdTime = Date.now() - 60 * 1000;              // Threshold is 1 minute
           let lastTimestamp = Date.now();
 
+          if (this.gateway) break;                                   // This feed is not used for registration
+
           // Registration that is not on aggregated list yet
           do {
             this.logger.debug(`'Registration that is not on aggregated list yet' cycle, i is ${i}`)
@@ -211,8 +247,6 @@ export class SwarmChat {
             validUsers = usersFeedCommit.users.filter((user) => this.utils.validateUserObject(user));
             lastTimestamp = validUsers[0].timestamp;
             if (!usersFeedCommit.overwrite) {
-              //const userTopicString = this.utils.generateUserOwnedFeedId(topic, validUsers[0].address);
-              //const res = await this.utils.getLatestFeedIndex(this.bee, this.bee.makeFeedTopic(userTopicString), validUsers[0].address);
     
               const newUser =  { 
                 ...validUsers[0], 
@@ -225,9 +259,8 @@ export class SwarmChat {
           } while (i >= 0 && lastTimestamp > thresholdTime);
           
           break;
-        } else {                                                    // These do not have index, but we can initialize them to 0
-          //const userTopicString = this.utils.generateUserOwnedFeedId(topic, validUsers[0].address);
-          //const res = await this.utils.getLatestFeedIndex(this.bee, this.bee.makeFeedTopic(userTopicString), validUsers[0].address);
+        } else {
+          if (this.gateway) break;                                   // This feed is not used for registration in gateway mode, so this is spam.
 
           const newUser =  { 
             ...validUsers[0], 
@@ -272,7 +305,16 @@ export class SwarmChat {
         throw new Error('The provided address does not match the address derived from the private key');
       }
 
-      this.startActivityAnalyzes(topic, address, stamp as BatchId);                  // Every User is doing Activity Analysis, and one of them is selected to write the UsersFeed
+      if (this.gateway) {
+        if (this.gsocSubscribtion) {                                                   // Only the Gateway is doing Activity Analysis (removeIdleUsers is called by this function)
+          this.startActivityAnalyzes(topic, address, stamp as BatchId);
+          console.info("You are the Gateway")
+        } else {
+          console.info("You are not the Gateway")
+        }
+      } else {
+        this.startActivityAnalyzes(topic, address, stamp as BatchId);                  // Every User is doing Activity Analysis (when not in gateway mode), and one of them is selected to write the UsersFeed
+      }
 
       const alreadyRegistered = this.users.find((user) => user.address === participant);
 
@@ -297,21 +339,33 @@ export class SwarmChat {
         throw new Error('User object validation failed');
       }
 
-      const uploadObject: UsersFeedCommit = {
-        users: [newUser],
-        overwrite: false
-      }
+      if (this.gateway) {         // Gateway mode
+        const result = await this.utils.sendMessageToGsoc(
+          this.bee.url,
+          stamp as BatchId,
+          topic,
+          this.gsocResourceId,
+          JSON.stringify(newUser)
+        );
 
-      const userRef = await this.utils.uploadObjectToBee(this.bee, uploadObject, stamp as any);
-      if (!userRef) throw new Error('Could not upload user to bee');
-
-      const feedWriter = this.utils.graffitiFeedWriterFromTopic(this.bee, topic);
-
-      try {
-        await feedWriter.upload(stamp, userRef.reference);
-      } catch (error) {
-        if (this.utils.isNotFoundError(error)) {
-          await feedWriter.upload(stamp, userRef.reference, { index: 0 });
+        if (!result?.payload.length) throw "Error writing User object to GSOC!";
+      } else {                    // Not in gateway mode
+        const uploadObject: UsersFeedCommit = {
+          users: [newUser],
+          overwrite: false
+        }
+  
+        const userRef = await this.utils.uploadObjectToBee(this.bee, uploadObject, stamp as any);
+        if (!userRef) throw new Error('Could not upload user to bee');
+  
+        const feedWriter = this.utils.graffitiFeedWriterFromTopic(this.bee, topic);
+  
+        try {
+          await feedWriter.upload(stamp, userRef.reference);
+        } catch (error) {
+          if (this.utils.isNotFoundError(error)) {
+            await feedWriter.upload(stamp, userRef.reference, { index: 0 });
+          }
         }
       }
     } catch (error) {
@@ -418,7 +472,13 @@ export class SwarmChat {
         return;
       }
 
-      const selectedUser = this.utils.selectUsersFeedCommitWriter(activeUsers, this.emitStateEvent.bind(this));
+      let selectedUser: EthAddress;
+      if (this.gateway) {                                         // If in gateway mode, the Gateway is always doing the Users feed writing
+        if (!this.gsocSubscribtion) throw "Only Gateway should run  this function in gateway mode!";
+        selectedUser = ownAddress;                                // removeIdleUsers wouldn't run, if you wouldn't be the Gateway (when in gateway mode)
+      } else {
+        selectedUser = this.utils.selectUsersFeedCommitWriter(activeUsers, this.emitStateEvent.bind(this));
+      }
 
       if (selectedUser === ownAddress) {
         await this.writeUsersFeedCommit(topic, stamp, activeUsers);
@@ -444,13 +504,16 @@ export class SwarmChat {
         users: activeUsers as UserWithIndex[],
         overwrite: true
       }
+
       const userRef = await this.utils.uploadObjectToBee(this.bee, uploadObject, stamp as any);
       if (!userRef) throw new Error('Could not upload user list to bee');
 
       const feedWriter = this.utils.graffitiFeedWriterFromTopic(this.bee, topic, { timeout: this.USERS_FEED_TIMEOUT });
 
       await feedWriter.upload(stamp, userRef.reference);
-      this.logger.debug("Upload was successful!")    
+      this.logger.debug("Upload was successful!");
+
+      if (this.gateway) this.users = activeUsers;
 
     } catch (error) {
       this.handleError({
@@ -501,7 +564,11 @@ export class SwarmChat {
         this.newlyResigeredUsers = [];
       }
     
-      await this.setUsers(this.utils.removeDuplicateUsers(newUsers));
+      if (!this.gsocSubscribtion) {
+        console.log("Overwriting users object...")
+        await this.setUsers(this.utils.removeDuplicateUsers(newUsers));
+      }
+
       this.usersFeedIndex++;                                                                       // We assume that download was successful. Next time we are checking next index.
     
       // update userActivityTable
@@ -523,6 +590,34 @@ export class SwarmChat {
           }
         }
       }
+    }
+  }
+
+  private userRegisteredThroughGsoc(topic: string, stamp: BatchId, gsocMessage: string) {
+    try {
+      // Validation happens in subscribeToGsoc
+      const user: UserWithIndex = {
+        ...JSON.parse(gsocMessage) as unknown as User,
+        index: -1
+      };
+
+      if (!this.isRegistered(user.address)) {
+        const newList = [...this.users, user];
+        //this.utils.removeDuplicateUsers(newList);
+  
+        this.writeUsersFeedCommit(
+          topic,
+          stamp,
+          newList
+        );
+      }
+
+    } catch (error) {
+      this.handleError({
+        error: error as unknown as Error,
+        context: `userRegisteredThroughGsoc`,
+        throw: false
+      });
     }
   }
 
@@ -580,8 +675,11 @@ export class SwarmChat {
       // If the message is relatively new, we insert it to messages array, otherwise, we drop it
       if (messageData.timestamp + this.IDLE_TIME*2 > Date.now()) {
         this.messages.push(messageData);
+        
+        // TODO GSOC - this needs to be conditional, only Gateway is doing this. It's not a problem if other users are doing it as well, but has no significance
         // Update userActivityTable
         this.updateUserActivityAtNewMessage(messageData);
+
         this.messagesIndex++;
       }
     
@@ -594,7 +692,6 @@ export class SwarmChat {
     } catch (error) {
       if (error instanceof Error) {
         if (error.message.includes("timeout")) {
-          //TODO decide between 'warn' and 'info'
           this.logger.info(`Timeout of ${this.MAX_TIMEOUT} exceeded for readMessage.`);
         } else {
           if (!this.utils.isNotFoundError(error)) {
@@ -762,4 +859,41 @@ export class SwarmChat {
 
 
 
-const x = new SwarmChat()
+
+async function host() {
+  const isNode = typeof window === 'undefined' && typeof global !== 'undefined';
+  if (!isNode) return;
+  
+  const x = new SwarmChat({
+    url: "http://161.97.125.121:2433", 
+    idleTime: (60*60*1000),
+    gateway: "86d2154575a43f3bf9922d9c52f0a63daca1cf352d57ef2b5027e38bc8d8f272"
+  })
+  const roomTopic = "gsoc-6"
+  
+  await x.initChatRoom(
+    roomTopic, 
+    "5596455deee29df5dc2644ecfc6afb147d7382e07c550e9b10d30ea20b88fcc7" as BatchId
+  )
+  
+  const w = ethers.Wallet.createRandom()
+  await x.registerUser(
+    roomTopic,
+    {
+      nickName: "Gateway",
+      participant: w.address as EthAddress,
+      key: w.privateKey,
+      stamp: "5596455deee29df5dc2644ecfc6afb147d7382e07c550e9b10d30ea20b88fcc7" as BatchId,
+    }
+  )
+
+  x.startMessageFetchProcess(roomTopic)
+  x.startUserFetchProcess(roomTopic)
+  
+  do {
+    await sleep(5000);
+  } while (true)
+
+}
+
+host();
