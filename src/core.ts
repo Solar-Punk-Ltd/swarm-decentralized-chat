@@ -602,7 +602,7 @@ export class SwarmChat {
         index: -1
       };
 
-      console.log("Users list at userRegisteredThroughGsoc: ", this.users)
+      console.info("Users list at userRegisteredThroughGsoc: ", this.users)
       //if (!this.isRegistered(user.address)) {
         const newList = [...this.users, user];
         //this.utils.removeDuplicateUsers(newList);
