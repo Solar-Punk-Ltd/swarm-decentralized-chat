@@ -21,7 +21,7 @@ import {
 } from './types';
 
 import { EVENTS, HEX_RADIX, MINUTE, SECOND } from './constants';
-import { HexString } from 'solarpunk-gsoc/dist/types';
+import { HexString } from '@solarpunkltd/gsoc/dist/types';
 
 
 /**
@@ -161,7 +161,7 @@ export class SwarmChat {
         else this.gsocResourceId = resourceId;
         console.info("resource ID: ", resourceId)
   
-        // Subscribe to the GSOC feed
+        // Subscribe to the GSOC feed  
         this.gsocSubscribtion = await this.utils.subscribeToGsoc(
           this.bee.url,
           stamp,
@@ -169,6 +169,7 @@ export class SwarmChat {
           this.gsocResourceId,
           this.userRegisteredThroughGsoc.bind(this)
         );
+        console.info("GSOC Subscribtion: ", this.gsocSubscribtion)
       }
 
     } catch (error) {
@@ -596,6 +597,7 @@ export class SwarmChat {
 
   private userRegisteredThroughGsoc(topic: string, stamp: BatchId, gsocMessage: string) {
     try {
+      console.info("User registered through GSOC: ", gsocMessage)
       // Validation happens in subscribeToGsoc
       const user: UserWithIndex = {
         ...JSON.parse(gsocMessage) as unknown as User,
@@ -862,7 +864,7 @@ export class SwarmChat {
   }
 
   async host(roomTopic: string, stamp: BatchId) {
-    console.log("v0.0.11 or above")
+    console.log("v0.0.15 or above")
     const isNode = typeof window === 'undefined' && typeof global !== 'undefined';
     if (!isNode) {
       this.handleError({

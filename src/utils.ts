@@ -1,12 +1,12 @@
 import { ethers, BytesLike, utils, Wallet } from 'ethers';
-import { InformationSignal } from 'solarpunk-gsoc';
+import { InformationSignal } from '@solarpunkltd/gsoc';
 import * as crypto from 'crypto';
 import pino from 'pino';
 import { BatchId, Bee, BeeRequestOptions, FeedReader, Signer, UploadResult, Utils } from '@ethersphere/bee-js';
 import { Bytes, ErrorObject, EthAddress, IdleMs, MessageData, PrefixedHexString, Sha3Message, User, UserActivity, UsersFeedCommit, UserWithIndex } from './types';
 import { CONSENSUS_ID, EVENTS, HEX_RADIX } from './constants';
-import { HexString } from 'solarpunk-gsoc/dist/types';
-import { SingleOwnerChunk } from 'solarpunk-gsoc/dist/soc';
+import { HexString } from '@solarpunkltd/gsoc/dist/types';
+import { SingleOwnerChunk } from '@solarpunkltd/gsoc/dist/soc';
 
 export class SwarmChatUtils {
   private handleError: (errObject: ErrorObject) => void;
@@ -382,6 +382,7 @@ export class SwarmChatUtils {
   async subscribeToGsoc(url: string, stamp: BatchId, topic: string, resourceId: HexString<number>, callback: (topic: string, stamp: BatchId, gsocMessage: string) => void) {
     try {
       if (!resourceId) throw "ResourceID was not provided!";
+      console.info("Subscribing to GSOC with resourceId: ", resourceId);
 
       const informationSignal = new InformationSignal(url, {
         postageBatchId: stamp,
