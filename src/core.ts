@@ -350,6 +350,7 @@ export class SwarmChat {
 
         if (!result?.payload.length) throw "Error writing User object to GSOC!";
       } else {                    // Not in gateway mode
+        console.error("ABSOLUTELY NOT ALLOWED! VERY SERIOUS ERROR!")
         const uploadObject: UsersFeedCommit = {
           users: [newUser],
           overwrite: false
