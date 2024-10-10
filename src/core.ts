@@ -159,7 +159,7 @@ export class SwarmChat {
         );
         if (!resourceId) throw "Could not create resource ID!";
         else this.gsocResourceId = resourceId;
-        console.info("resource ID: ", resourceId)
+        console.info("resource ID (v0.0.9): ", resourceId)
   
         // Subscribe to the GSOC feed
         this.gsocSubscribtion = await this.utils.subscribeToGsoc(
