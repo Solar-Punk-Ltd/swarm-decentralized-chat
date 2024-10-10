@@ -159,7 +159,7 @@ export class SwarmChat {
         );
         if (!resourceId) throw "Could not create resource ID!";
         else this.gsocResourceId = resourceId;
-        console.info("resource ID (v0.0.9): ", resourceId)
+        console.info("resource ID: ", resourceId)
   
         // Subscribe to the GSOC feed
         this.gsocSubscribtion = await this.utils.subscribeToGsoc(
@@ -614,6 +614,9 @@ export class SwarmChat {
         );
       //}
 
+      this.setUsers(newList);
+      this.updateUserActivityAtRegistration();
+
     } catch (error) {
       this.handleError({
         error: error as unknown as Error,
@@ -859,6 +862,7 @@ export class SwarmChat {
   }
 
   async host(roomTopic: string, stamp: BatchId) {
+    console.log("v0.0.11 or above")
     const isNode = typeof window === 'undefined' && typeof global !== 'undefined';
     if (!isNode) {
       this.handleError({
@@ -870,7 +874,7 @@ export class SwarmChat {
     
     await this.initChatRoom(roomTopic, stamp);
     this.startMessageFetchProcess(roomTopic);
-    this.startUserFetchProcess(roomTopic);
+    //TODO this should not be needed this.startUserFetchProcess(roomTopic);
     
     do {
       await this.utils.sleep(5000);
