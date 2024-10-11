@@ -864,7 +864,7 @@ export class SwarmChat {
   }
 
   async host(roomTopic: string, stamp: BatchId) {
-    console.log("v0.0.15 or above")
+    console.log("this is v0.0.16 or above")
     const isNode = typeof window === 'undefined' && typeof global !== 'undefined';
     if (!isNode) {
       this.handleError({

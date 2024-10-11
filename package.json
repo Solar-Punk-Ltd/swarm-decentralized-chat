@@ -1,12 +1,12 @@
 {
     "name": "@solarpunkltd/swarm-decentralized-chat",
-    "version": "0.0.15",
+    "version": "0.0.16",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
     "exports": {
         ".": {
             "import": "./dist/index.js",
-            "require": "./dist/index.cjs"
+            "require": "./dist/index.js"
         },
         "./*": "./dist/*"
     },
