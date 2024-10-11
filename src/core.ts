@@ -281,10 +281,10 @@ export class SwarmChat {
           aggregatedList = [...aggregatedList, newUser];
         }
 
-        i--;
         const resp = await this.utils.fetchUsersFeedAtIndex(this.bee, feedReader, i);
         if (!resp) throw new Error(`Error reading Users feed at index ${i}`);
         feedCommit = resp.feedCommit;
+        i--;
       } while (i > 0)
 
       aggregatedList = this.utils.removeDuplicateUsers(aggregatedList);
@@ -897,29 +897,3 @@ export class SwarmChat {
     } while (true)
   }
 }
-
-
-async function test() {
-  const x = new SwarmChat({
-    url: "http://161.97.125.121:1733",
-    gateway: "86d2154575a43f3bf9922d9c52f0a63daca1cf352d57ef2b5027e38bc8d8f272",
-    gsocResourceId: "9804000000000000000000000000000000000000000000000000000000000000",
-    logLevel: "info",
-    usersFeedTimeout: 10000,
-    messageCheckInterval: 2000,
-    messageFetchMin: 2000,
-  })
-  
-  /*const wal = ethers.Wallet.createRandom();
-  await x.registerUser("hello_w", {
-    participant: wal.address as EthAddress,
-    key: wal.privateKey,
-    nickName: "Peter the Tester",
-    stamp: "53ec9faa9fe03ac14d33f68901dc88d71aa03c810b8de6a11b31f38c1c09d92a"
-  })*/
-
-  await x.initUsers("Layer 2s::test")
-  console.log("User count: ", x.getUserCount());
-}
-
-test();
