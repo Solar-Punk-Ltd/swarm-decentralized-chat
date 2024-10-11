@@ -1,9 +1,8 @@
 import { ethers, BytesLike, utils, Wallet } from 'ethers';
 import { InformationSignal } from '@solarpunkltd/gsoc';
-import * as crypto from 'crypto';
 import pino from 'pino';
 import { BatchId, Bee, BeeRequestOptions, FeedReader, Signer, UploadResult, Utils } from '@ethersphere/bee-js';
-import { Bytes, ErrorObject, EthAddress, IdleMs, MessageData, PrefixedHexString, Sha3Message, User, UserActivity, UsersFeedCommit, UserWithIndex } from './types';
+import { Bytes, ErrorObject, EthAddress, IdleMs, MessageData, PrefixedHexString, Sha3Message, User, UserActivity, UsersFeedCommit, UsersFeedResponse, UserWithIndex } from './types';
 import { CONSENSUS_ID, EVENTS, HEX_RADIX } from './constants';
 import { HexString } from '@solarpunkltd/gsoc/dist/types';
 import { SingleOwnerChunk } from '@solarpunkltd/gsoc/dist/soc';
@@ -134,15 +133,20 @@ export class SwarmChatUtils {
     return (num + i).toString(HEX_RADIX).padStart(HEX_RADIX, '0');
   }
 
-  async fetchUsersFeedAtIndex(bee: Bee, feedReader: FeedReader, i: number): Promise<UsersFeedCommit|null> {
+  async fetchUsersFeedAtIndex(bee: Bee, feedReader: FeedReader, i: number | undefined): Promise<UsersFeedResponse|null> {
     try {
-      if (i < 0) throw "Index out of range!";
+      if (i !== undefined && i < 0) throw "Index out of range!";
 
       const feedEntry = await feedReader.download({ index: i});
+      const nextIndex = parseInt(feedEntry.feedIndexNext, HEX_RADIX);
       const data = await bee.downloadData(feedEntry.reference);
       const objectFromFeed = data.json() as unknown as UsersFeedCommit;
 
-      return objectFromFeed
+      return {
+        feedCommit: objectFromFeed,
+        nextIndex
+      }
+
     } catch (error) {
       this.handleError({
         error: error as unknown as Error,
@@ -382,7 +386,6 @@ export class SwarmChatUtils {
   async subscribeToGsoc(url: string, stamp: BatchId, topic: string, resourceId: HexString<number>, callback: (topic: string, stamp: BatchId, gsocMessage: string) => void) {
     try {
       if (!resourceId) throw "ResourceID was not provided!";
-      console.info("Subscribing to GSOC with resourceId: ", resourceId);
 
       const informationSignal = new InformationSignal(url, {
         postageBatchId: stamp,

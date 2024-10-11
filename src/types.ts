@@ -73,6 +73,12 @@ export interface UsersFeedCommit {
     users: User[];
     overwrite: boolean;
 }
+
+// Response of fetchUsersFeedAtIndex
+export interface UsersFeedResponse {
+    feedCommit: UsersFeedCommit;
+    nextIndex: number;
+}
   
 export interface UserWithIndex extends User {
     index: number;

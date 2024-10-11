@@ -82,6 +82,8 @@ export class SwarmChat {
 
   // Constructor, static variables will get value here
   constructor(settings: ChatSettings = {}, beeInstance?: Bee, eventEmitter?: EventEmitter) {
+    console.info("SwarmChat created, version: v0.0.16");
+
     this.bee = this.bee = beeInstance || new Bee(settings.url || 'http://localhost:1633');
     this.gateway = settings.gateway || "";                                                  // If exists, SwarmChat will run in gateway mode
     this.gsocResourceId = settings.gsocResourceId || "";                                    // When in gateway mode, normal nodes need to provide this
@@ -169,7 +171,6 @@ export class SwarmChat {
           this.gsocResourceId,
           this.userRegisteredThroughGsoc.bind(this)
         );
-        console.info("GSOC Subscribtion: ", this.gsocSubscribtion)
       }
 
     } catch (error) {
@@ -222,32 +223,41 @@ export class SwarmChat {
       const feedReader = this.utils.graffitiFeedReaderFromTopic(this.bee, topic);
       let aggregatedList: UserWithIndex[] = [];
 
-      const feedEntry = await feedReader.download();
-      this.usersFeedIndex = parseInt(feedEntry.feedIndexNext, HEX_RADIX);
+      // This will be the first feedCommit in the loop, and we fetch the index as well
+      const resp = await this.utils.fetchUsersFeedAtIndex(this.bee, feedReader, undefined);
+      if (!resp) throw new Error(`Error reading Users feed, index not known yet.`);
+      let { feedCommit, nextIndex } = resp;
+
+      this.usersFeedIndex = nextIndex;
 
       // Go back, until we find an overwrite commit
-      for (let i = this.usersFeedIndex-1; i >= 0 ; i--) {        
-        let usersFeedCommit = await this.utils.fetchUsersFeedAtIndex(this.bee, feedReader, i) as unknown as UsersFeedCommit;
-        let validUsers = usersFeedCommit.users.filter((user) => this.utils.validateUserObject(user));
+      let i = this.usersFeedIndex-1;
+      do {
+        let validUsers = feedCommit.users.filter((user) => this.utils.validateUserObject(user));
 
-        if (usersFeedCommit.overwrite) {                             // They will have index that was already written to the object by Activity Analysis writer
+        if (feedCommit.overwrite) {                                  // They will have index that was already written to the object by Activity Analysis writer
           const usersBatch: UserWithIndex[] = validUsers as unknown as UserWithIndex[];
-          aggregatedList = [...aggregatedList, ...usersBatch];
+          aggregatedList = [...usersBatch];
 
           const thresholdTime = Date.now() - 60 * 1000;              // Threshold is 1 minute
           let lastTimestamp = Date.now();
 
-          if (this.gateway) break;                                   // This feed is not used for registration
+          if (this.gateway) break;                                   // This feed is not used for registration in gateway mode, so we are done
 
           // Registration that is not on aggregated list yet
           do {
             this.logger.debug(`'Registration that is not on aggregated list yet' cycle, i is ${i}`)
             i--;
             if (i < 0) break;
-            usersFeedCommit = await this.utils.fetchUsersFeedAtIndex(this.bee, feedReader, i) as unknown as UsersFeedCommit;
-            validUsers = usersFeedCommit.users.filter((user) => this.utils.validateUserObject(user));
+            
+            const res = await this.utils.fetchUsersFeedAtIndex(this.bee, feedReader, i);
+            if (!res) throw new Error(`Error reading Users feed at index ${i}, inside prev-registration cycle`);
+            feedCommit = res.feedCommit;
+            validUsers = feedCommit.users.filter((user) => this.utils.validateUserObject(user));
+            if (validUsers.length === 0) throw new Error(`There are no valid Users in this UsersFeedCommit!`);
+
             lastTimestamp = validUsers[0].timestamp;
-            if (!usersFeedCommit.overwrite) {
+            if (!feedCommit.overwrite) {
     
               const newUser =  { 
                 ...validUsers[0], 
@@ -257,7 +267,7 @@ export class SwarmChat {
               aggregatedList = [...aggregatedList, newUser];
               this.logger.debug(`User ${validUsers[0].username} added in 'Registration that is not on aggregated list yet' cycle`);
             }
-          } while (i >= 0 && lastTimestamp > thresholdTime);
+          } while (i > 0 && lastTimestamp > thresholdTime);
           
           break;
         } else {
@@ -270,7 +280,12 @@ export class SwarmChat {
           
           aggregatedList = [...aggregatedList, newUser];
         }
-      }
+
+        i--;
+        const resp = await this.utils.fetchUsersFeedAtIndex(this.bee, feedReader, i);
+        if (!resp) throw new Error(`Error reading Users feed at index ${i}`);
+        feedCommit = resp.feedCommit;
+      } while (i > 0)
 
       aggregatedList = this.utils.removeDuplicateUsers(aggregatedList);
       await this.setUsers(aggregatedList);
@@ -351,7 +366,6 @@ export class SwarmChat {
 
         if (!result?.payload.length) throw "Error writing User object to GSOC!";
       } else {                    // Not in gateway mode
-        console.error("ABSOLUTELY NOT ALLOWED! VERY SERIOUS ERROR!")
         const uploadObject: UsersFeedCommit = {
           users: [newUser],
           overwrite: false
@@ -597,7 +611,6 @@ export class SwarmChat {
 
   private userRegisteredThroughGsoc(topic: string, stamp: BatchId, gsocMessage: string) {
     try {
-      console.info("User registered through GSOC: ", gsocMessage)
       // Validation happens in subscribeToGsoc
       const user: UserWithIndex = {
         ...JSON.parse(gsocMessage) as unknown as User,
@@ -605,7 +618,8 @@ export class SwarmChat {
       };
 
       console.info("Users list at userRegisteredThroughGsoc: ", this.users)
-      //if (!this.isRegistered(user.address)) {
+      //TODO it is safer if this if is not here, but it should be here, if everything works fine
+      if (!this.isRegistered(user.address)) {
         const newList = [...this.users, user];
         //this.utils.removeDuplicateUsers(newList);
   
@@ -614,9 +628,10 @@ export class SwarmChat {
           stamp,
           newList
         );
-      //}
 
-      this.setUsers(newList);
+        this.setUsers(newList);
+      }
+
       this.updateUserActivityAtRegistration();
 
     } catch (error) {
@@ -864,7 +879,6 @@ export class SwarmChat {
   }
 
   async host(roomTopic: string, stamp: BatchId) {
-    console.log("this is v0.0.16 or above")
     const isNode = typeof window === 'undefined' && typeof global !== 'undefined';
     if (!isNode) {
       this.handleError({
@@ -883,3 +897,29 @@ export class SwarmChat {
     } while (true)
   }
 }
+
+
+async function test() {
+  const x = new SwarmChat({
+    url: "http://161.97.125.121:1733",
+    gateway: "86d2154575a43f3bf9922d9c52f0a63daca1cf352d57ef2b5027e38bc8d8f272",
+    gsocResourceId: "9804000000000000000000000000000000000000000000000000000000000000",
+    logLevel: "info",
+    usersFeedTimeout: 10000,
+    messageCheckInterval: 2000,
+    messageFetchMin: 2000,
+  })
+  
+  /*const wal = ethers.Wallet.createRandom();
+  await x.registerUser("hello_w", {
+    participant: wal.address as EthAddress,
+    key: wal.privateKey,
+    nickName: "Peter the Tester",
+    stamp: "53ec9faa9fe03ac14d33f68901dc88d71aa03c810b8de6a11b31f38c1c09d92a"
+  })*/
+
+  await x.initUsers("Layer 2s::test")
+  console.log("User count: ", x.getUserCount());
+}
+
+test();
