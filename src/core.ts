@@ -498,6 +498,7 @@ export class SwarmChat {
 
       if (selectedUser === ownAddress) {
         await this.writeUsersFeedCommit(topic, stamp, activeUsers);
+        this.setUsers(activeUsers);
       }
       
       this.removeIdleIsRunning = false;
