@@ -18,7 +18,7 @@
         "build": "tsc"
     },
     "dependencies": {
-        "@solarpunkltd/gsoc": "0.0.2",
+        "@solarpunkltd/gsoc": "0.0.3",
         "@ethersphere/bee-js": "^6.9.1",
         "ethers": "^5.7.2",
         "pino": "^9.3.2",
