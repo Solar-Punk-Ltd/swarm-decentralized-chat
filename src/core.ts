@@ -1,5 +1,5 @@
-import { BatchId, Bee, Reference, Signer, Utils } from '@ethersphere/bee-js';
-import { ethers, Signature, Wallet } from 'ethers';
+import { BatchId, Bee, Reference } from '@ethersphere/bee-js';
+import { ethers, Signature } from 'ethers';
 import pino from 'pino';
 import pinoPretty from 'pino-pretty';
 
