@@ -1,4 +1,4 @@
-import { BatchId, Bee, Reference } from '@ethersphere/bee-js';
+import { BatchId, Bee, Reference, Signer, Utils } from '@ethersphere/bee-js';
 import { ethers, Signature, Wallet } from 'ethers';
 import pino from 'pino';
 import pinoPretty from 'pino-pretty';
@@ -20,8 +20,8 @@ import {
   UserWithIndex
 } from './types';
 
-import { EVENTS, HEX_RADIX, MINUTE, SECOND } from './constants';
-import { HexString } from '@solarpunkltd/gsoc/dist/types';
+import { CONSENSUS_ID, EVENTS, HEX_RADIX, MINUTE, SECOND } from './constants';
+import { HexString } from '@anythread/gsoc/dist/types';
 
 
 /**
@@ -480,7 +480,7 @@ export class SwarmChat {
       
       const activeUsers = this.utils.getActiveUsers(this.users, this.userActivityTable, this.IDLE_TIME, this.USER_LIMIT);
 
-      if (activeUsers.length === 0) {
+      if (activeUsers.length === 0 && !this.gateway) {
         this.logger.info("There are no active users, Activity Analysis will continue when a user registers.");
         await this.writeUsersFeedCommit(topic, stamp, activeUsers);
         if (this.removeIdleUsersInterval) clearInterval(this.removeIdleUsersInterval);
@@ -498,6 +498,7 @@ export class SwarmChat {
 
       if (selectedUser === ownAddress) {
         await this.writeUsersFeedCommit(topic, stamp, activeUsers);
+        this.setUsers(activeUsers);
       }
       
       this.removeIdleIsRunning = false;
@@ -887,10 +888,12 @@ export class SwarmChat {
         throw: true
       });
     };
+
+    const identity = ethers.Wallet.createRandom();
     
     await this.initChatRoom(roomTopic, stamp);
     this.startMessageFetchProcess(roomTopic);
-    //TODO this should not be needed this.startUserFetchProcess(roomTopic);
+    this.startActivityAnalyzes(roomTopic, identity.address as EthAddress, stamp as BatchId);
     
     do {
       await this.utils.sleep(5000);

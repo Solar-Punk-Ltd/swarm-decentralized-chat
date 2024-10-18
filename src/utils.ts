@@ -1,11 +1,11 @@
 import { ethers, BytesLike, utils, Wallet } from 'ethers';
-import { InformationSignal } from '@solarpunkltd/gsoc';
+import { InformationSignal } from '@anythread/gsoc';
 import pino from 'pino';
 import { BatchId, Bee, BeeRequestOptions, FeedReader, Signer, UploadResult, Utils } from '@ethersphere/bee-js';
 import { Bytes, ErrorObject, EthAddress, IdleMs, MessageData, PrefixedHexString, Sha3Message, User, UserActivity, UsersFeedCommit, UsersFeedResponse, UserWithIndex } from './types';
 import { CONSENSUS_ID, EVENTS, HEX_RADIX } from './constants';
-import { HexString } from '@solarpunkltd/gsoc/dist/types';
-import { SingleOwnerChunk } from '@solarpunkltd/gsoc/dist/soc';
+import { HexString } from '@anythread/gsoc/dist/types';
+import { SingleOwnerChunk } from '@anythread/gsoc/dist/soc';
 
 export class SwarmChatUtils {
   private handleError: (errObject: ErrorObject) => void;
