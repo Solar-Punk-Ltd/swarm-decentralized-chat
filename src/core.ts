@@ -1,6 +1,5 @@
-import { BatchId, Bee, Reference, Signer, Utils } from '@ethersphere/bee-js';
-import { ethers, Signature, Wallet } from 'ethers';
-import packageJson from '../package.json';
+import { BatchId, Bee, Reference } from '@ethersphere/bee-js';
+import { ethers, Signature } from 'ethers';
 import pino from 'pino';
 import pinoPretty from 'pino-pretty';
 
@@ -123,7 +122,7 @@ export class SwarmChat {
     this.messagesQueue = new AsyncQueue({ waitable: true, max: 4 }, this.handleError.bind(this), this.logger);
     this.reqTimeAvg = new RunningAverage(1000, this.logger);
 
-    console.info(`SwarmChat created, version: ${packageJson.version}`);
+    console.info(`SwarmChat created, version: v0.1.0 or above`);
   }
 
   /** With getChatActions, it's possible to listen to events on front end or anywhere outside the library. 
