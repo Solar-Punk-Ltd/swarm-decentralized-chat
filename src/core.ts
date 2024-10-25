@@ -1,5 +1,6 @@
 import { BatchId, Bee, Reference, Signer, Utils } from '@ethersphere/bee-js';
 import { ethers, Signature, Wallet } from 'ethers';
+import packageJson from '../package.json';
 import pino from 'pino';
 import pinoPretty from 'pino-pretty';
 
@@ -82,8 +83,6 @@ export class SwarmChat {
 
   // Constructor, static variables will get value here
   constructor(settings: ChatSettings = {}, beeInstance?: Bee, eventEmitter?: EventEmitter) {
-    console.info("SwarmChat created, version: v0.0.16");
-
     this.bee = this.bee = beeInstance || new Bee(settings.url || 'http://localhost:1633');
     this.gateway = settings.gateway || "";                                                  // If exists, SwarmChat will run in gateway mode
     this.gsocResourceId = settings.gsocResourceId || "";                                    // When in gateway mode, normal nodes need to provide this
@@ -123,6 +122,8 @@ export class SwarmChat {
     this.usersQueue = new AsyncQueue({ waitable: true, max: 1 }, this.handleError.bind(this), this.logger);
     this.messagesQueue = new AsyncQueue({ waitable: true, max: 4 }, this.handleError.bind(this), this.logger);
     this.reqTimeAvg = new RunningAverage(1000, this.logger);
+
+    console.info(`SwarmChat created, version: ${packageJson.version}`);
   }
 
   /** With getChatActions, it's possible to listen to events on front end or anywhere outside the library. 
@@ -546,8 +547,9 @@ export class SwarmChat {
     return () => this.usersQueue.enqueue((index) => this.getNewUsers(topic));
   }
 
-  // Reads the Users feed, and changes the users object, accordingly
-  private async getNewUsers(topic: string) {
+  /** Reads the Users feed, and changes the users object, accordingly
+   *  This is mostly called internally, but we made it public, for checking registration success */
+  public async getNewUsers(topic: string) {
     try {
       this.emitStateEvent(EVENTS.LOADING_USERS, true);
     
