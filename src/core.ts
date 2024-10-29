@@ -793,15 +793,16 @@ export class SwarmChat {
   }
 
   // Writes the users object, will avoid collision with other write operation
-  private async setUsers(newUsers: UserWithIndex[]) {
-    return this.utils.retryAwaitableAsync(async () => {
-      if (this.usersLoading) {
-        throw new Error('Users are still loading');
+  private setUsers(newUsers: UserWithIndex[]) {
+    let success = false;
+    do {
+      if (!this.usersLoading) {
+        this.usersLoading = true;
+        this.users = newUsers;
+        this.usersLoading = false;
+        success = true;
       }
-      this.usersLoading = true;
-      this.users = newUsers;
-      this.usersLoading = false;
-    });
+    } while (!success)
   }
 
   // Emit event about state change
