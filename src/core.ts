@@ -20,7 +20,7 @@ import {
   UserWithIndex
 } from './types';
 
-import { CONSENSUS_ID, EVENTS, HEX_RADIX, MINUTE, SECOND } from './constants';
+import { EVENTS, MINUTE, SECOND } from './constants';
 import { HexString } from '@anythread/gsoc/dist/types';
 
 
@@ -67,7 +67,7 @@ export class SwarmChat {
   private messagesIndex = 0;
   private removeIdleIsRunning = false;                                      // Avoid race conditions
   private userActivityTable: UserActivity = {};                             // Used to remove inactive users
-  private newlyResigeredUsers: UserWithIndex[] = [];                        // keep track of fresh users
+  private newlyRegisteredUsers: UserWithIndex[] = [];                        // keep track of fresh users
   private reqCount = 0;                                                     // Diagnostics only
   //private prettyStream = null;
   private logger = pino(/*this.prettyStream*/);                                 // Logger. Levels: "fatal" | "error" | "warn" | "info" | "debug" | "trace" | "silent"
@@ -419,14 +419,14 @@ export class SwarmChat {
   private async updateUserActivityAtRegistration() {
     try {
       
-      for (let i = 0; i < this.newlyResigeredUsers.length; i++) {
-        const address = this.newlyResigeredUsers[i].address;
-        this.logger.info(`New user registered. Inserting ${this.newlyResigeredUsers[i].timestamp} to ${address}`);
+      for (let i = 0; i < this.newlyRegisteredUsers.length; i++) {
+        const address = this.newlyRegisteredUsers[i].address;
+        this.logger.info(`New user registered. Inserting ${this.newlyRegisteredUsers[i].timestamp} to ${address}`);
         if (this.userActivityTable[address])                                    // Update entry
-          this.userActivityTable[address].timestamp = this.newlyResigeredUsers[i].timestamp;
+          this.userActivityTable[address].timestamp = this.newlyRegisteredUsers[i].timestamp;
         else                                                                    // Create new entry
           this.userActivityTable[address] = {
-            timestamp: this.newlyResigeredUsers[i].timestamp,
+            timestamp: this.newlyRegisteredUsers[i].timestamp,
             readFails: 0
           }
       }
@@ -574,12 +574,12 @@ export class SwarmChat {
           index: -1
         };
         newUsers.push(theNewUser);
-        this.newlyResigeredUsers.push(theNewUser);
+        this.newlyRegisteredUsers.push(theNewUser);
         this.emitStateEvent(EVENTS.USER_REGISTERED, validUsers[0].username);
       } else {
         // Overwrite
-        newUsers = this.utils.removeDuplicateUsers([...this.newlyResigeredUsers, ...validUsers as unknown as UserWithIndex[]]);
-        this.newlyResigeredUsers = [];
+        newUsers = this.utils.removeDuplicateUsers([...this.newlyRegisteredUsers, ...validUsers as unknown as UserWithIndex[]]);
+        this.newlyRegisteredUsers = [];
       }
     
       if (!this.gsocSubscribtion) {
@@ -624,11 +624,11 @@ export class SwarmChat {
         const newList = [...this.users, user];
         //this.utils.removeDuplicateUsers(newList);
   
-        this.writeUsersFeedCommit(
+        /*this.writeUsersFeedCommit(
           topic,
           stamp,
           newList
-        );
+        );*/
 
         this.setUsers(newList);
       }
@@ -876,7 +876,7 @@ export class SwarmChat {
       currentMessageFetchInterval: this.mInterval,
       maxParallel: this.messagesQueue.getMaxParallel(),
       userActivityTable: this.userActivityTable,
-      newlyResigeredUsers: this.newlyResigeredUsers,
+      newlyResigeredUsers: this.newlyRegisteredUsers,
       requestCount: this.reqCount,
     }
   }
