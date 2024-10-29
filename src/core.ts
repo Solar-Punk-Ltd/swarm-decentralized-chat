@@ -620,7 +620,6 @@ export class SwarmChat {
       };
 
       console.info("Users list at userRegisteredThroughGsoc: ", this.users)
-      //TODO it is safer if this if is not here, but it should be here, if everything works fine
       if (!this.isRegistered(user.address)) {
         const newList = [...this.users, user];
         //this.utils.removeDuplicateUsers(newList);
