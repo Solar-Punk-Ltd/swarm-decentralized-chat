@@ -288,7 +288,7 @@ export class SwarmChat {
       } while (i > 0)
 
       aggregatedList = this.utils.removeDuplicateUsers(aggregatedList);
-      await this.setUsers(aggregatedList);
+      this.setUsers(aggregatedList);
 
     } catch (error) {
       this.handleError({
@@ -584,7 +584,7 @@ export class SwarmChat {
     
       if (!this.gsocSubscribtion) {
         console.log("Overwriting users object...")
-        await this.setUsers(this.utils.removeDuplicateUsers(newUsers));
+        this.setUsers(this.utils.removeDuplicateUsers(newUsers));
       }
 
       this.usersFeedIndex++;                                                                       // We assume that download was successful. Next time we are checking next index.
@@ -693,7 +693,7 @@ export class SwarmChat {
       const uIndex = this.users.findIndex((u) => (u.address === user.address));
       const newUsers = this.users;
       if (newUsers[uIndex]) newUsers[uIndex].index = currIndex + 1;         // If this User was dropped, we won't increment it's index, but Streamer will
-      await this.setUsers(newUsers);
+      this.setUsers(newUsers);
     
       // If the message is relatively new, we insert it to messages array, otherwise, we drop it
       if (messageData.timestamp + this.IDLE_TIME*2 > Date.now()) {
