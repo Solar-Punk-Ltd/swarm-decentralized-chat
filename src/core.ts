@@ -793,6 +793,7 @@ export class SwarmChat {
   }
 
   // Writes the users object, will avoid collision with other write operation
+  // Would cause a hot loop if usersLoading would be true, but we don't expect that to happen
   private setUsers(newUsers: UserWithIndex[]) {
     let success = false;
     do {
