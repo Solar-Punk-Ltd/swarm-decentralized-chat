@@ -624,11 +624,11 @@ export class SwarmChat {
         const newList = [...this.users, user];
         //this.utils.removeDuplicateUsers(newList);
   
-        /*this.writeUsersFeedCommit(
+        this.writeUsersFeedCommit(
           topic,
           stamp,
           newList
-        );*/
+        );
 
         this.setUsers(newList);
       }
