@@ -15,7 +15,8 @@
         "README.md"
     ],
     "scripts": {
-        "build": "tsc"
+        "build": "tsc",
+        "test": "jest"
     },
     "dependencies": {
         "@anythread/gsoc": "0.1.0",
