@@ -17,7 +17,7 @@ async function runTest() {
     const chat = new SwarmChat({
         url: "http://161.97.125.121:1733",
         gateway: "86d2154575a43f3bf9922d9c52f0a63daca1cf352d57ef2b5027e38bc8d8f272",
-        gsocResourceId: "50aebeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+        gsocResourceId: "4a0f000000000000000000000000000000000000000000000000000000000000",
         logLevel: "error",
     });
 
@@ -35,8 +35,8 @@ async function runTest() {
     do {
         console.info("Is Registered: ", chat.isRegistered(address));
         
-        await chat.sendMessage(address, roomId, generateMessageObj(address, nickName), stamp, wallet.privateKey);
-        utils.sleep(5*1000);
+        await chat.sendMessage(address, roomId, generateMessageObj(nonce, address, nickName), stamp, wallet.privateKey);
+        await utils.sleep(5*1000);
         nonce++;
     } while (nonce < 20);
 }
@@ -60,9 +60,9 @@ function randomThreadId() {
 }
   
 
-function generateMessageObj(address: EthAddress, username: string) {
+function generateMessageObj(text: any, address: EthAddress, username: string) {
     const json = {
-        text: `Message at ${new Date()}`,
+        text: `Message ${text} at ${new Date()}`,
         threadId: null,
         messageId: randomThreadId(),
         parent: null,
