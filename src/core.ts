@@ -617,8 +617,6 @@ export class SwarmChat {
       this.emitStateEvent(EVENTS.LOADING_USERS, false);
       
     } catch (error) {
-      console.log("something failed")
-      console.log("error: ", error)
       if (error instanceof Error) {
         if (error.message.includes("timeout")) {
           console.error("timeout error")
@@ -632,6 +630,8 @@ export class SwarmChat {
               context: `getNewUsers`,
               throw: false
             });
+          } else {
+            console.log("404")
           }
         }
       }
