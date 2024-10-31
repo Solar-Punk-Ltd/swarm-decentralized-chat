@@ -26,4 +26,12 @@ describe('SwarmChat initialization and configuration', () => {
     expect(chat.getUserUpdateIntervalConst()).toBe(9000);
   });
 
+  it('should give back on and off event handlers', async () => {
+    const chat = new SwarmChat();
+    const { on, off } = chat.getChatActions();
+
+    expect(on).toBeInstanceOf(Function);
+    expect(off).toBeInstanceOf(Function);
+  });
+
 });
