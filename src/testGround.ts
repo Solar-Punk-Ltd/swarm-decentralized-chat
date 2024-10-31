@@ -9,7 +9,7 @@ const roomId = "layer-2sT";
 const stamp = "84b83885ae1e25899f7f3a51f4c585c1bbbaa6eb8ba6004d16888c200e3c02c5" as unknown as BatchId;
 const wallet = Wallet.createRandom();
 const address = wallet.address as unknown as EthAddress;
-const nickName = "Alice";
+const nickName = "Dyna";
 const utils = createUtils();
 let nonce = 0;
 

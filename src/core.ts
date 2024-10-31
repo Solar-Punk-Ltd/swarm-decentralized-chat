@@ -568,13 +568,15 @@ export class SwarmChat {
       this.emitStateEvent(EVENTS.LOADING_USERS, true);
     
       const feedReader = this.utils.graffitiFeedReaderFromTopic(this.bee, topic);
+     console.info(`Downloading UsersFeedCommit at index ${this.usersFeedIndex}`) 
       const feedEntry = await feedReader.download({ index: this.usersFeedIndex });
-    
+    console.log(`feedEntry: ${feedEntry.reference}`)
       const data = await this.bee.downloadData(feedEntry.reference, { 
         headers: { 
           'Swarm-Redundancy-Level': "0"
         }
       });
+    console.log(`Data downloaded.`)
       const objectFromFeed = data.json() as unknown as UsersFeedCommit;
       this.logger.debug(`New UsersFeedCommit received!  ${objectFromFeed}`)
     
