@@ -83,7 +83,7 @@ export class SwarmChat {
 
   // Constructor, static variables will get value here
   constructor(settings: ChatSettings = {}, beeInstance?: Bee, eventEmitter?: EventEmitter) {
-    this.bee = this.bee = beeInstance || new Bee(settings.url || 'http://localhost:1633');
+    this.bee = beeInstance || new Bee(settings.url || 'http://localhost:1633');
     this.gateway = settings.gateway || "";                                                  // If exists, SwarmChat will run in gateway mode
     this.gsocResourceId = settings.gsocResourceId || "";                                    // When in gateway mode, normal nodes need to provide this
     this.emitter = eventEmitter || new EventEmitter();
@@ -104,6 +104,7 @@ export class SwarmChat {
     this.MESSAGE_FETCH_MIN = settings.messageFetchMin || 300;                               // Lowest possible value for message fetch interval
     this.MESSAGE_FETCH_MAX = settings.messageFetchMax || 8 * SECOND;                        // Highest possible value for message fetch interval
     this.F_STEP = settings.fStep || 100;                                                    // When interval is changed, it is changed by this value
+    this.mInterval = settings.messageCheckInterval || this.MESSAGE_FETCH_MIN * 3;           // 3x times min, or user-specified
     
     const prettier = settings.prettier ? pinoPretty({                                       // Colorizing capability for logger
       colorize: true,
@@ -872,7 +873,7 @@ export class SwarmChat {
 
   /** Returns the current message check interval, which is dynamic */
   public getMessageCheckInterval() {
-    return this.messageFetchClock;
+    return this.mInterval;
   }
 
   /** Returns the USER_UPDATE_INTERVAL constant, that can be set when creating a new SwarmChat instance */
