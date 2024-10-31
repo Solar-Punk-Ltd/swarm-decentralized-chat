@@ -619,6 +619,7 @@ export class SwarmChat {
     } catch (error) {
       if (error instanceof Error) {
         if (error.message.includes("timeout")) {
+          console.error("timeout error")
           this.logger.info(`Timeout exceeded.`);
           this.reqTimeAvg.addValue(this.MAX_TIMEOUT);
         } else {
