@@ -538,7 +538,7 @@ export class SwarmChat {
       console.info("Writing UsersFeedCommit to index ", this.usersFeedIndex)
       let usersForLog = "";   //TODO remove after debugging
       usersToWrite.map((uObj) => { //TODO remove after debugging
-        usersForLog = usersForLog.concat(usersForLog, ` ${uObj.username}(${uObj.address})`)
+        usersForLog = usersForLog.concat(` ${uObj.username}(${uObj.address})`)
       });
       console.info(`These users were written (${usersToWrite.length}):  ${usersForLog}\n`);
       await feedWriter.upload(stamp, userRef.reference, { index: this.usersFeedIndex });
