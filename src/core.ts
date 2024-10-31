@@ -618,6 +618,7 @@ export class SwarmChat {
       
     } catch (error) {
       console.log("something failed")
+      console.log("error: ", error)
       if (error instanceof Error) {
         if (error.message.includes("timeout")) {
           console.error("timeout error")
