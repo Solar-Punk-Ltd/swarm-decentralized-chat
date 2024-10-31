@@ -621,6 +621,7 @@ export class SwarmChat {
           this.reqTimeAvg.addValue(this.MAX_TIMEOUT);
         } else {
           if (!this.utils.isNotFoundError(error)) {
+            console.error("THE ERROR: ", error)
             this.handleError({
               error: error as unknown as Error,
               context: `getNewUsers`,
