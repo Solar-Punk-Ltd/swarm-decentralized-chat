@@ -122,7 +122,7 @@ export class SwarmChat {
     this.messagesQueue = new AsyncQueue({ waitable: true, max: 4 }, this.handleError.bind(this), this.logger);
     this.reqTimeAvg = new RunningAverage(1000, this.logger);
 
-    console.info(`SwarmChat created, version: v0.1.0 or above`);
+    console.info(`SwarmChat created, version: v0.1.8 or above`);
   }
 
   /** With getChatActions, it's possible to listen to events on front end or anywhere outside the library. 
@@ -567,15 +567,6 @@ export class SwarmChat {
     try {
       this.emitStateEvent(EVENTS.LOADING_USERS, true);
     
-      const BeeList = [new Bee("http://65.108.40.58:2433"), new Bee("http://65.108.40.58:2133"), new Bee("http://65.108.40.58:1633")];
-      const fReaders = [this.utils.graffitiFeedReaderFromTopic(BeeList[0], topic), this.utils.graffitiFeedReaderFromTopic(BeeList[1], topic), this.utils.graffitiFeedReaderFromTopic(BeeList[2], topic)]
-      const promiseArray = [fReaders[0].download({ index: this.usersFeedIndex }), fReaders[1].download({ index: this.usersFeedIndex }), fReaders[2].download({ index: this.usersFeedIndex })]
-
-      const pRes = await Promise.allSettled(promiseArray);
-
-      pRes.map((res, index) => console.log(`Result ${index}: ${res.status}`))
-      console.log("end\n\n")
-      
       const feedReader = this.utils.graffitiFeedReaderFromTopic(this.bee, topic);
      console.info(`Downloading UsersFeedCommit at index ${this.usersFeedIndex}`) 
       const feedEntry = await feedReader.download({ index: this.usersFeedIndex });

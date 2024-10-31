@@ -12,6 +12,7 @@ const address = wallet.address as unknown as EthAddress;
 const nickName = "Bob";
 const utils = createUtils();
 let nonce = 0;
+let registeredOnce = false;
 
 async function runTest() {
     console.info("My name: ", nickName);
@@ -37,6 +38,8 @@ async function runTest() {
 
     do {
         console.info("Is Registered: ", chat.isRegistered(address));
+        if (chat.isRegistered(address) === false && registeredOnce) console.warn("WARNING! SOMEHOW WE LOST OUR REGISTERED STATUS!")
+        registeredOnce = true;
         
         await chat.sendMessage(address, roomId, generateMessageObj(nonce, address, nickName), stamp, wallet.privateKey);
         await utils.sleep(5*1000);
