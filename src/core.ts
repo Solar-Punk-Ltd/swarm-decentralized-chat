@@ -624,7 +624,6 @@ export class SwarmChat {
           this.reqTimeAvg.addValue(this.MAX_TIMEOUT);
         } else {
           if (!this.utils.isNotFoundError(error)) {
-            console.error("THE ERROR: ", error)
             this.handleError({
               error: error as unknown as Error,
               context: `getNewUsers`,
@@ -632,7 +631,9 @@ export class SwarmChat {
             });
           } else {
             console.log("404")
-            if (this.usersFeedIndex > 0) this.usersFeedIndex--;
+            //TODO This might be something that helps, but it can also cause problems
+            // Probably increment a NotFound count, and if reached a certain number, do a fetchIndex
+            //if (this.usersFeedIndex > 0) this.usersFeedIndex--;
           }
         }
       }

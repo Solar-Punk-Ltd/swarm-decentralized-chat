@@ -29,14 +29,15 @@ async function runTest() {
     chat.startUserFetchProcess(roomId);
     chat.initUsers(roomId);
 
-    await chat.registerUser(roomId, {
-        participant: wallet.address as unknown as EthAddress,
-        key: wallet.privateKey,
-        nickName,
-        stamp
-    });
-
+    
     do {
+        await chat.registerUser(roomId, {
+            participant: wallet.address as unknown as EthAddress,
+            key: wallet.privateKey,
+            nickName,
+            stamp
+        });
+        
         console.info("Is Registered: ", chat.isRegistered(address));
         if (chat.isRegistered(address) === false && registeredOnce) console.warn("WARNING! SOMEHOW WE LOST OUR REGISTERED STATUS!")
         if (chat.isRegistered(address)) registeredOnce = true;
