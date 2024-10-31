@@ -345,7 +345,7 @@ export class SwarmChat {
       )) as unknown as Signature;
 
       const newUser: User = {
-        address,
+        address: address.toLocaleLowerCase() as EthAddress,
         username,
         timestamp,
         signature,
@@ -536,8 +536,8 @@ export class SwarmChat {
       }
       
       console.info("Writing UsersFeedCommit to index ", this.usersFeedIndex)
-      let usersForLog = "";
-      usersToWrite.map((uObj) => { 
+      let usersForLog = "";   //TODO remove after debugging
+      usersToWrite.map((uObj) => { //TODO remove after debugging
         usersForLog = usersForLog.concat(usersForLog, ` ${uObj.username}(${uObj.address})`)
       });
       console.info(`These users were written:  ${usersForLog}\n`);
