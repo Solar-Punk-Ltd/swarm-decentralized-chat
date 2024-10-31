@@ -532,7 +532,7 @@ export class SwarmChat {
       if (!this.usersFeedIndex) {
         console.info("Fetching current index...")
         const currentIndex = await feedWriter.download()
-        this.usersFeedIndex = this.utils.hexStringToNumber(currentIndex.feedIndexNext) - 1;
+        this.usersFeedIndex = this.utils.hexStringToNumber(currentIndex.feedIndexNext);
       }
       
       console.info("Writing UsersFeedCommit to index ", this.usersFeedIndex)
