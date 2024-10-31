@@ -1,6 +1,4 @@
 import { SwarmChat } from '../src/core';
-import { BatchId, Bee } from '@ethersphere/bee-js';
-import { STAMP, URL } from './config';
 import { MINUTE } from '../src/constants';
 
 

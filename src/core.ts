@@ -886,6 +886,12 @@ export class SwarmChat {
     //TODO most likely we won't use this
     this.usersQueue.clearQueue();
   }
+  
+  /** Returns GSOC Subscription address or null */
+  public getGsocAddress() {
+    if (!this.gsocSubscribtion) return null;
+    else return this.gsocSubscribtion.gsocAddress;
+  }
 
   private handleError(errObject: ErrorObject) {
     this.logger.error(`Error in ${errObject.context}: ${errObject.error.message}`);
