@@ -4,7 +4,9 @@ import { DEFAULT_TOPIC_ONE, STAMP, URL } from "./config";
 import { createInitializedChat, createUtils } from "./fixtures";
 import { SwarmChatUtils } from "../src/utils";
 import pino from "pino";
-import { ErrorObject } from "../src/types";
+import { ErrorObject, EthAddress } from "../src/types";
+import { Wallet } from "ethers";
+import { SECOND } from "../src/constants";
 
 
 describe('Core functionalities (chat room creation, registration, message sending', () => {
@@ -14,7 +16,15 @@ describe('Core functionalities (chat room creation, registration, message sendin
     beforeEach(async () => {
         chat = await createInitializedChat();
         utils = createUtils();
+        jest.useFakeTimers()
     });
+
+    afterEach(async () => {
+        chat?.stopMessageFetchProcess();
+        chat?.stopUserFetchProcess();
+    })
+
+    jest.setTimeout(30 * SECOND);
 
     it('should initialize the chat', async () => {
         if (!utils) return;
@@ -42,6 +52,30 @@ describe('Core functionalities (chat room creation, registration, message sendin
 
         expect(spyInit).toHaveBeenCalledWith(topic, stamp);
         expect(chatInstance.getGsocAddress()).toBeTruthy();
+    });
+
+    /*it('should register a User, in non-gateway mode (decentralized)', async () => {
+        const wallet = Wallet.createRandom();
+        const stamp = STAMP as unknown as BatchId;
+
+        chat?.startUserFetchProcess(DEFAULT_TOPIC_ONE);
+        chat?.startMessageFetchProcess(DEFAULT_TOPIC_ONE);
+
+        const registrationResult = chat?.registerUser(DEFAULT_TOPIC_ONE, {
+            participant: wallet.address as unknown as EthAddress,
+            key: wallet.privateKey,
+            nickName: "Tester",
+            stamp
+        });
+
+        console.log("Registration result: ", registrationResult)
+        
+
+        expect(chat?.getUserCount()).toBe(1);
+    });*/
+
+    it('should register a User in Gateway mode (centralized registration)', async () => {
+
     });
 
 });

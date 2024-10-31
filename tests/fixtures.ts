@@ -15,6 +15,11 @@ export async function createInitializedChat() {
     return chatInstance;
 }
 
+/** Create a chat with default topic, in Gateway Mode */
+export async function createInitializedChatGatewayMode() {
+    
+}
+
 /** Create SwarmChatUtils helper */
 export function createUtils() {
     const utils = new SwarmChatUtils((errObject: ErrorObject) => {
