@@ -15,6 +15,7 @@ export async function createInitializedChat() {
     return chatInstance;
 }
 
+/** Create SwarmChatUtils helper */
 export function createUtils() {
     const utils = new SwarmChatUtils((errObject: ErrorObject) => {
         if (errObject.throw) {
