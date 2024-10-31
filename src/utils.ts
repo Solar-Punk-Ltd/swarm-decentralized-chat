@@ -133,6 +133,10 @@ export class SwarmChatUtils {
     return (num + i).toString(HEX_RADIX).padStart(HEX_RADIX, '0');
   }
 
+  hexStringToNumber(hexString: string) {
+    return Number('0x' + hexString);
+  }
+
   async fetchUsersFeedAtIndex(bee: Bee, feedReader: FeedReader, i: number | undefined): Promise<UsersFeedResponse|null> {
     try {
       if (i !== undefined && i < 0) throw "Index out of range!";

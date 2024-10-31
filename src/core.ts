@@ -304,6 +304,7 @@ export class SwarmChat {
   /** Checks if a given Ethereum address is registered or not (registered means active, others will read it's messages) */
   public isRegistered(userAddress: EthAddress): boolean {
     const findResult = this.users.findIndex((user) => user.address === userAddress);
+    console.log("Users @ isRegistered: ", this.users)
 
     if (findResult === -1) return false;
     else return true;
@@ -527,7 +528,15 @@ export class SwarmChat {
 
       const feedWriter = this.utils.graffitiFeedWriterFromTopic(this.bee, topic, { timeout: this.USERS_FEED_TIMEOUT });
 
-      await feedWriter.upload(stamp, userRef.reference);
+     // new code 
+      if (!this.usersFeedIndex) {
+        console.info("Fetching current index...")
+        const currentIndex = await feedWriter.download()
+        this.usersFeedIndex = this.utils.hexStringToNumber(currentIndex.feedIndexNext)
+      }
+      
+      console.info("Writing UsersFeedCommit to index ", this.usersFeedIndex)
+      await feedWriter.upload(stamp, userRef.reference, { index: this.usersFeedIndex });
       this.logger.debug("Upload was successful!");
 
       if (this.gateway) this.users = activeUsers;
@@ -584,6 +593,9 @@ export class SwarmChat {
     
       if (!this.gsocSubscribtion) {
         console.log("Overwriting users object...")
+        console.log("Object from feed: ", objectFromFeed)
+        console.log("New users: ", newUsers)
+        console.log("New users after remove: ", this.utils.removeDuplicateUsers(newUsers))
         this.setUsers(this.utils.removeDuplicateUsers(newUsers));
       }
 
