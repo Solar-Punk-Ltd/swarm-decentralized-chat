@@ -88,6 +88,13 @@ export class SwarmChatUtils {
         }
     });
 
+    console.log("The object.values at remove duplicate: ", Object.values(userMap))
+    let usersForLog = "";   //TODO remove after debugging
+    Object.values(userMap).map((uObj) => { //TODO remove after debugging
+        usersForLog = usersForLog.concat(usersForLog, ` ${uObj.username}(${uObj.address})`)
+    });
+    console.info(`More readable:: ${Object.values(userMap).length}:  ${usersForLog}\n`);
+
     return Object.values(userMap);
   }
 
