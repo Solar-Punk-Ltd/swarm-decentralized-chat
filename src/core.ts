@@ -345,7 +345,7 @@ export class SwarmChat {
       )) as unknown as Signature;
 
       const newUser: User = {
-        address: address.toLocaleLowerCase() as EthAddress,
+        address,
         username,
         timestamp,
         signature,
