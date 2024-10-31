@@ -23,6 +23,7 @@ async function runTest() {
 
     chat.startMessageFetchProcess(roomId);
     chat.startUserFetchProcess(roomId);
+    chat.initUsers(roomId);
 
     await chat.registerUser(roomId, {
         participant: wallet.address as unknown as EthAddress,
@@ -33,6 +34,7 @@ async function runTest() {
 
     do {
         console.info("Is Registered: ", chat.isRegistered(address));
+        
         await chat.sendMessage(address, roomId, generateMessageObj(address, nickName), stamp, wallet.privateKey);
         utils.sleep(5*1000);
         nonce++;

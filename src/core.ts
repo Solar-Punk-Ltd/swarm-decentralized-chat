@@ -593,10 +593,13 @@ export class SwarmChat {
       }
     
       if (!this.gsocSubscribtion) {
-        console.log("Overwriting users object...")
-        console.log("Object from feed: ", objectFromFeed)
-        console.log("New users: ", newUsers)
-        console.log("New users after remove: ", this.utils.removeDuplicateUsers(newUsers))
+        console.info("Overwriting users object...")
+        console.log("usersFeedIndex: ", this.usersFeedIndex)
+        console.log("New users length:", newUsers.length);
+        if (newUsers.length > 0) {
+          console.info("Addres at index 0: ", newUsers[0].address);
+          console.info("Username at index 0: ", newUsers[0].username);
+        }
         this.setUsers(this.utils.removeDuplicateUsers(newUsers));
       }
 
