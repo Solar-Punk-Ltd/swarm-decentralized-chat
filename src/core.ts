@@ -632,6 +632,7 @@ export class SwarmChat {
             });
           } else {
             console.log("404")
+            if (this.usersFeedIndex > 0) this.usersFeedIndex--;
           }
         }
       }
