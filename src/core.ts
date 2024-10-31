@@ -868,6 +868,11 @@ export class SwarmChat {
     return this.USER_UPDATE_INTERVAL;
   }
 
+  /** Clears the Users fetch queue, so we don't update user list with obsolate records */
+  public resetUsersQueue() {
+    this.usersQueue.clearQueue();
+  }
+
   private handleError(errObject: ErrorObject) {
     this.logger.error(`Error in ${errObject.context}: ${errObject.error.message}`);
     this.emitter.emit(EVENTS.ERROR, errObject);
