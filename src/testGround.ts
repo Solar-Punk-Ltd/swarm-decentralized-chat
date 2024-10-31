@@ -14,6 +14,9 @@ const utils = createUtils();
 let nonce = 0;
 
 async function runTest() {
+    console.info("My name: ", nickName);
+    console.info("My address: ", address);
+
     const chat = new SwarmChat({
         url: "http://161.97.125.121:1733",
         gateway: "86d2154575a43f3bf9922d9c52f0a63daca1cf352d57ef2b5027e38bc8d8f272",

@@ -517,8 +517,9 @@ export class SwarmChat {
   private async writeUsersFeedCommit(topic: string, stamp: BatchId, activeUsers: UserWithIndex[]) {
     try {
       this.logger.info("The user was selected for submitting the UsersFeedCommit! (removeIdleUsers)");
+      const usersToWrite = this.utils.removeDuplicateUsers(activeUsers);
       const uploadObject: UsersFeedCommit = {
-        users: activeUsers as UserWithIndex[],
+        users: usersToWrite as UserWithIndex[],
         overwrite: true
       }
 
@@ -536,7 +537,7 @@ export class SwarmChat {
       
       console.info("Writing UsersFeedCommit to index ", this.usersFeedIndex)
       let usersForLog = "";
-      activeUsers.map((uObj) => { 
+      usersToWrite.map((uObj) => { 
         usersForLog = usersForLog.concat(usersForLog, ` ${uObj.username}(${uObj.address})`)
       });
       console.info(`These users were written:  ${usersForLog}\n`);
@@ -544,7 +545,7 @@ export class SwarmChat {
       this.usersFeedIndex++;
       this.logger.debug("Upload was successful!");
 
-      if (this.gateway) this.users = activeUsers;
+      if (this.gateway) this.users = usersToWrite;
 
     } catch (error) {
       this.handleError({
