@@ -537,6 +537,7 @@ export class SwarmChat {
       
       console.info("Writing UsersFeedCommit to index ", this.usersFeedIndex)
       await feedWriter.upload(stamp, userRef.reference, { index: this.usersFeedIndex });
+      this.usersFeedIndex++;
       this.logger.debug("Upload was successful!");
 
       if (this.gateway) this.users = activeUsers;
