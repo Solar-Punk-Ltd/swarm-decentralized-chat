@@ -531,7 +531,7 @@ export class SwarmChat {
       if (!this.usersFeedIndex) {
         console.info("Fetching current index...")
         const currentIndex = await feedWriter.download()
-        this.usersFeedIndex = this.utils.hexStringToNumber(currentIndex.feedIndexNext)
+        this.usersFeedIndex = this.utils.hexStringToNumber(currentIndex.feedIndexNext) - 1;
       }
       
       console.info("Writing UsersFeedCommit to index ", this.usersFeedIndex)
@@ -634,10 +634,10 @@ export class SwarmChat {
         index: -1
       };
 
-      console.info("Length of users list at userRegisteredThroughGsoc: ", this.users.length)
+      console.info("\n------Length of users list at userRegisteredThroughGsoc: ", this.users.length)
       if (this.users.length > 0) {
         console.info("Addres at last index: ", this.users[this.users.length-1].address);
-        console.info("Username at index 0: ", this.users[this.users.length-1].username);
+        console.info("Username at last index: ", this.users[this.users.length-1].username);
       }
 
       if (!this.isRegistered(user.address)) {
