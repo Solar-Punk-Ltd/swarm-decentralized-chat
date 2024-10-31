@@ -143,7 +143,6 @@ export class SwarmChatUtils {
 
       const feedEntry = await feedReader.download({ index: i});
       const nextIndex = parseInt(feedEntry.feedIndexNext, HEX_RADIX);
-      console.log("HEX RADIX ", nextIndex)
       const data = await bee.downloadData(feedEntry.reference);
       const objectFromFeed = data.json() as unknown as UsersFeedCommit;
 

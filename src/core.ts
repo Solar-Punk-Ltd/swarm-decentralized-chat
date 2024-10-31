@@ -304,7 +304,6 @@ export class SwarmChat {
   /** Checks if a given Ethereum address is registered or not (registered means active, others will read it's messages) */
   public isRegistered(userAddress: EthAddress): boolean {
     const findResult = this.users.findIndex((user) => user.address === userAddress);
-    console.log("Users @ isRegistered: ", this.users)
 
     if (findResult === -1) return false;
     else return true;
@@ -635,7 +634,12 @@ export class SwarmChat {
         index: -1
       };
 
-      console.info("Users list at userRegisteredThroughGsoc: ", this.users)
+      console.info("Length of users list at userRegisteredThroughGsoc: ", this.users.length)
+      if (this.users.length > 0) {
+        console.info("Addres at last index: ", this.users[this.users.length-1].address);
+        console.info("Username at index 0: ", this.users[this.users.length-1].username);
+      }
+
       if (!this.isRegistered(user.address)) {
         const newList = [...this.users, user];
         //this.utils.removeDuplicateUsers(newList);
