@@ -39,7 +39,7 @@ async function runTest() {
     do {
         console.info("Is Registered: ", chat.isRegistered(address));
         if (chat.isRegistered(address) === false && registeredOnce) console.warn("WARNING! SOMEHOW WE LOST OUR REGISTERED STATUS!")
-        registeredOnce = true;
+        if (chat.isRegistered(address)) registeredOnce = true;
         
         await chat.sendMessage(address, roomId, generateMessageObj(nonce, address, nickName), stamp, wallet.privateKey);
         await utils.sleep(5*1000);
