@@ -8,6 +8,7 @@ const URL = 'http://localhost:1633'
 describe('SwarmChat', () => {
   let chat: SwarmChat;
   const beeInstance = new Bee(URL);
+  
   const topic = 'test-topic';
   const stamp = STAMP as unknown as BatchId;
 
