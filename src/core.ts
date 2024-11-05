@@ -20,7 +20,7 @@ import {
   UserWithIndex
 } from './types';
 
-import { CONSENSUS_ID, EVENTS, HEX_RADIX, MINUTE, SECOND } from './constants';
+import { EVENTS, MINUTE, SECOND } from './constants';
 import { HexString } from '@anythread/gsoc/dist/types';
 
 
@@ -66,8 +66,9 @@ export class SwarmChat {
   private mInterval: number = this.MESSAGE_FETCH_MIN * 3;                   // We initialize message fetch interval to higher than min, we don't know network conditions yet
   private messagesIndex = 0;
   private removeIdleIsRunning = false;                                      // Avoid race conditions
+  private userFetchIsRunning = false;                                       // Wait for the previous getNewUsers to finish
   private userActivityTable: UserActivity = {};                             // Used to remove inactive users
-  private newlyResigeredUsers: UserWithIndex[] = [];                        // keep track of fresh users
+  private newlyRegisteredUsers: UserWithIndex[] = [];                        // keep track of fresh users
   private reqCount = 0;                                                     // Diagnostics only
   //private prettyStream = null;
   private logger = pino(/*this.prettyStream*/);                                 // Logger. Levels: "fatal" | "error" | "warn" | "info" | "debug" | "trace" | "silent"
@@ -122,7 +123,7 @@ export class SwarmChat {
     this.messagesQueue = new AsyncQueue({ waitable: true, max: 4 }, this.handleError.bind(this), this.logger);
     this.reqTimeAvg = new RunningAverage(1000, this.logger);
 
-    console.info(`SwarmChat created, version: v0.1.0 or above`);
+    console.info(`SwarmChat created, version: v0.1.8 or above`);
   }
 
   /** With getChatActions, it's possible to listen to events on front end or anywhere outside the library. 
@@ -136,8 +137,8 @@ export class SwarmChat {
    *  ``` */
   public getChatActions() {
     return {
-      startFetchingForNewUsers: this.enqueueUserFetch,      // i think these are obsolate
-      startLoadingNewMessages: this.readMessagesForAll,     // this as well
+      //startFetchingForNewUsers: this.tryUserFetch,      // i think these are obsolate
+      //startLoadingNewMessages: this.readMessagesForAll,     // this as well
       on: this.emitter.on,
       off: this.emitter.off,
     };
@@ -188,7 +189,7 @@ export class SwarmChat {
     if (this.userFetchClock) {
       clearInterval(this.userFetchClock);
     }
-    this.userFetchClock = setInterval(this.enqueueUserFetch(topic), this.USER_UPDATE_INTERVAL);
+    this.userFetchClock = setInterval(() => this.tryUserFetch(topic), this.USER_UPDATE_INTERVAL);
   }
 
   /** The SwarmChat instance will stop reading UsersFeedCommit messages, so won't know who are the currently active users. */
@@ -288,7 +289,7 @@ export class SwarmChat {
       } while (i > 0)
 
       aggregatedList = this.utils.removeDuplicateUsers(aggregatedList);
-      await this.setUsers(aggregatedList);
+      this.setUsers(aggregatedList);
 
     } catch (error) {
       this.handleError({
@@ -419,14 +420,14 @@ export class SwarmChat {
   private async updateUserActivityAtRegistration() {
     try {
       
-      for (let i = 0; i < this.newlyResigeredUsers.length; i++) {
-        const address = this.newlyResigeredUsers[i].address;
-        this.logger.info(`New user registered. Inserting ${this.newlyResigeredUsers[i].timestamp} to ${address}`);
+      for (let i = 0; i < this.newlyRegisteredUsers.length; i++) {
+        const address = this.newlyRegisteredUsers[i].address;
+        this.logger.info(`New user registered. Inserting ${this.newlyRegisteredUsers[i].timestamp} to ${address}`);
         if (this.userActivityTable[address])                                    // Update entry
-          this.userActivityTable[address].timestamp = this.newlyResigeredUsers[i].timestamp;
+          this.userActivityTable[address].timestamp = this.newlyRegisteredUsers[i].timestamp;
         else                                                                    // Create new entry
           this.userActivityTable[address] = {
-            timestamp: this.newlyResigeredUsers[i].timestamp,
+            timestamp: this.newlyRegisteredUsers[i].timestamp,
             readFails: 0
           }
       }
@@ -517,8 +518,9 @@ export class SwarmChat {
   private async writeUsersFeedCommit(topic: string, stamp: BatchId, activeUsers: UserWithIndex[]) {
     try {
       this.logger.info("The user was selected for submitting the UsersFeedCommit! (removeIdleUsers)");
+      const usersToWrite = this.utils.removeDuplicateUsers(activeUsers);
       const uploadObject: UsersFeedCommit = {
-        users: activeUsers as UserWithIndex[],
+        users: usersToWrite as UserWithIndex[],
         overwrite: true
       }
 
@@ -527,10 +529,24 @@ export class SwarmChat {
 
       const feedWriter = this.utils.graffitiFeedWriterFromTopic(this.bee, topic, { timeout: this.USERS_FEED_TIMEOUT });
 
-      await feedWriter.upload(stamp, userRef.reference);
+     // new code 
+      if (!this.usersFeedIndex) {
+        console.info("Fetching current index...")
+        const currentIndex = await feedWriter.download()
+        this.usersFeedIndex = this.utils.hexStringToNumber(currentIndex.feedIndexNext);
+      }
+      
+      console.info("Writing UsersFeedCommit to index ", this.usersFeedIndex)
+      let usersForLog = "";   //TODO remove after debugging
+      usersToWrite.map((uObj) => { //TODO remove after debugging
+        usersForLog = usersForLog.concat(` ${uObj.username}(${uObj.address})`)
+      });
+      console.info(`These users were written (${usersToWrite.length}):  ${usersForLog}\n`);
+      await feedWriter.upload(stamp, userRef.reference, { index: this.usersFeedIndex });
+      this.usersFeedIndex++;
       this.logger.debug("Upload was successful!");
 
-      if (this.gateway) this.users = activeUsers;
+      if (this.gateway) this.users = usersToWrite;
 
     } catch (error) {
       this.handleError({
@@ -542,8 +558,12 @@ export class SwarmChat {
   }
 
   // Adds a getNewUsers to the usersQueue, which will fetch new users
-  private enqueueUserFetch(topic: string) {
-    return () => this.usersQueue.enqueue((index) => this.getNewUsers(topic));
+  private tryUserFetch(topic: string) {
+    if (!this.userFetchIsRunning) {
+      this.getNewUsers(topic);
+    } else {
+      console.info("Previous getNewUsers is still running");
+    }
   }
 
   /** Reads the Users feed, and changes the users object, accordingly
@@ -551,15 +571,18 @@ export class SwarmChat {
   public async getNewUsers(topic: string) {
     try {
       this.emitStateEvent(EVENTS.LOADING_USERS, true);
+      this.userFetchIsRunning = true;
     
       const feedReader = this.utils.graffitiFeedReaderFromTopic(this.bee, topic);
+     console.info(`Downloading UsersFeedCommit at index ${this.usersFeedIndex}`) 
       const feedEntry = await feedReader.download({ index: this.usersFeedIndex });
-    
+    console.log(`feedEntry: ${feedEntry.reference}`)
       const data = await this.bee.downloadData(feedEntry.reference, { 
         headers: { 
           'Swarm-Redundancy-Level': "0"
         }
       });
+    console.log(`Data downloaded.`)
       const objectFromFeed = data.json() as unknown as UsersFeedCommit;
       this.logger.debug(`New UsersFeedCommit received!  ${objectFromFeed}`)
     
@@ -574,28 +597,37 @@ export class SwarmChat {
           index: -1
         };
         newUsers.push(theNewUser);
-        this.newlyResigeredUsers.push(theNewUser);
+        this.newlyRegisteredUsers.push(theNewUser);
         this.emitStateEvent(EVENTS.USER_REGISTERED, validUsers[0].username);
       } else {
         // Overwrite
-        newUsers = this.utils.removeDuplicateUsers([...this.newlyResigeredUsers, ...validUsers as unknown as UserWithIndex[]]);
-        this.newlyResigeredUsers = [];
+        newUsers = this.utils.removeDuplicateUsers([...this.newlyRegisteredUsers, ...validUsers as unknown as UserWithIndex[]]);
+        this.newlyRegisteredUsers = [];
       }
     
       if (!this.gsocSubscribtion) {
-        console.log("Overwriting users object...")
-        await this.setUsers(this.utils.removeDuplicateUsers(newUsers));
+        console.info("Overwriting users object...")
+        console.log("usersFeedIndex: ", this.usersFeedIndex)
+        console.log("New users length:", newUsers.length);
+        if (newUsers.length > 0) {
+          console.info("Addres at index 0: ", newUsers[0].address);
+          console.info("Username at index 0: ", newUsers[0].username);
+        }
+        this.setUsers(this.utils.removeDuplicateUsers(newUsers));
       }
 
       this.usersFeedIndex++;                                                                       // We assume that download was successful. Next time we are checking next index.
     
       // update userActivityTable
       this.updateUserActivityAtRegistration();
+      this.userFetchIsRunning = false;
       this.emitStateEvent(EVENTS.LOADING_USERS, false);
       
     } catch (error) {
+      this.userFetchIsRunning = false;
       if (error instanceof Error) {
         if (error.message.includes("timeout")) {
+          console.error("timeout error")
           this.logger.info(`Timeout exceeded.`);
           this.reqTimeAvg.addValue(this.MAX_TIMEOUT);
         } else {
@@ -605,6 +637,11 @@ export class SwarmChat {
               context: `getNewUsers`,
               throw: false
             });
+          } else {
+            console.log("404")
+            //TODO This might be something that helps, but it can also cause problems
+            // Probably increment a NotFound count, and if reached a certain number, do a fetchIndex
+            //if (this.usersFeedIndex > 0) this.usersFeedIndex--;
           }
         }
       }
@@ -619,8 +656,12 @@ export class SwarmChat {
         index: -1
       };
 
-      console.info("Users list at userRegisteredThroughGsoc: ", this.users)
-      //TODO it is safer if this if is not here, but it should be here, if everything works fine
+      console.info("\n------Length of users list at userRegisteredThroughGsoc: ", this.users.length)
+      if (this.users.length > 0) {
+        console.info("Addres at last index: ", this.users[this.users.length-1].address);
+        console.info("Username at last index: ", this.users[this.users.length-1].username);
+      }
+
       if (!this.isRegistered(user.address)) {
         const newList = [...this.users, user];
         //this.utils.removeDuplicateUsers(newList);
@@ -694,7 +735,7 @@ export class SwarmChat {
       const uIndex = this.users.findIndex((u) => (u.address === user.address));
       const newUsers = this.users;
       if (newUsers[uIndex]) newUsers[uIndex].index = currIndex + 1;         // If this User was dropped, we won't increment it's index, but Streamer will
-      await this.setUsers(newUsers);
+      this.setUsers(newUsers);
     
       // If the message is relatively new, we insert it to messages array, otherwise, we drop it
       if (messageData.timestamp + this.IDLE_TIME*2 > Date.now()) {
@@ -794,15 +835,17 @@ export class SwarmChat {
   }
 
   // Writes the users object, will avoid collision with other write operation
-  private async setUsers(newUsers: UserWithIndex[]) {
-    return this.utils.retryAwaitableAsync(async () => {
-      if (this.usersLoading) {
-        throw new Error('Users are still loading');
+  // Would cause a hot loop if usersLoading would be true, but we don't expect that to happen
+  private setUsers(newUsers: UserWithIndex[]) {
+    let success = false;
+    do {
+      if (!this.usersLoading) {
+        this.usersLoading = true;
+        this.users = newUsers;
+        this.usersLoading = false;
+        success = true;
       }
-      this.usersLoading = true;
-      this.users = newUsers;
-      this.usersLoading = false;
-    });
+    } while (!success)
   }
 
   // Emit event about state change
@@ -831,6 +874,12 @@ export class SwarmChat {
   /** Returns the USER_UPDATE_INTERVAL constant, that can be set when creating a new SwarmChat instance */
   public getUserUpdateIntervalConst() {
     return this.USER_UPDATE_INTERVAL;
+  }
+
+  /** Clears the Users fetch queue, so we don't update user list with obsolate records */
+  public resetUsersQueue() {
+    //TODO most likely we won't use this
+    this.usersQueue.clearQueue();
   }
 
   private handleError(errObject: ErrorObject) {
@@ -875,7 +924,7 @@ export class SwarmChat {
       currentMessageFetchInterval: this.mInterval,
       maxParallel: this.messagesQueue.getMaxParallel(),
       userActivityTable: this.userActivityTable,
-      newlyResigeredUsers: this.newlyResigeredUsers,
+      newlyResigeredUsers: this.newlyRegisteredUsers,
       requestCount: this.reqCount,
     }
   }
