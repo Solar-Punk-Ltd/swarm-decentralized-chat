@@ -532,8 +532,13 @@ export class SwarmChat {
      // new code 
       if (!this.usersFeedIndex) {
         console.info("Fetching current index...")
-        const currentIndex = await feedWriter.download()
-        this.usersFeedIndex = this.utils.hexStringToNumber(currentIndex.feedIndexNext);
+        try {
+          const currentIndex = await feedWriter.download();
+          this.usersFeedIndex = this.utils.hexStringToNumber(currentIndex.feedIndexNext);
+        } catch (error) {
+          this.usersFeedIndex = 0;
+          this.logger.warn(`Couldn't fetch current index, we will use 0 as index.`);
+        }
       }
       
       console.info("Writing UsersFeedCommit to index ", this.usersFeedIndex)
@@ -638,7 +643,6 @@ export class SwarmChat {
               throw: false
             });
           } else {
-            console.log("404")
             //TODO This might be something that helps, but it can also cause problems
             // Probably increment a NotFound count, and if reached a certain number, do a fetchIndex
             //if (this.usersFeedIndex > 0) this.usersFeedIndex--;
