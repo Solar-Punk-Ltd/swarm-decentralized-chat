@@ -373,7 +373,7 @@ export class SwarmChatUtils {
         },
       });
 
-      const mineResult = informationSignal.mineResourceId(this.hexToBytes(gateway), 11);
+      const mineResult = informationSignal.mineResourceId(this.hexToBytes(gateway), 12);
 
       return this.bytesToHex(mineResult.resourceId);
 
