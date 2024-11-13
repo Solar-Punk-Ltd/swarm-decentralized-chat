@@ -387,7 +387,7 @@ export class SwarmChatUtils {
     }
   }
 
-  async subscribeToGsoc(url: string, stamp: BatchId, topic: string, resourceId: HexString<number>, callback: (topic: string, stamp: BatchId, gsocMessage: string) => void) {
+  subscribeToGsoc(url: string, stamp: BatchId, topic: string, resourceId: HexString<number>, callback: (topic: string, stamp: BatchId, gsocMessage: string) => void) {
     try {
       if (!resourceId) throw "ResourceID was not provided!";
 
