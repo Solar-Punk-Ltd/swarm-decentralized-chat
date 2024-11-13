@@ -403,7 +403,7 @@ export class SwarmChat {
   }
 
   // Every User is doing Activity Analysis, and one of them is selected to write the UsersFeed
-  private async startActivityAnalyzes(topic: string, ownAddress: EthAddress, stamp: BatchId) {
+  private startActivityAnalyzes(topic: string, ownAddress: EthAddress, stamp: BatchId) {
     try {
       this.logger.info("Starting Activity Analysis...");
       this.removeIdleUsersInterval = setInterval(() => this.removeIdleUsers(topic, ownAddress, stamp), this.REMOVE_INACTIVE_USERS_INTERVAL);
@@ -418,8 +418,7 @@ export class SwarmChat {
   }
 
   // Used for Activity Analysis, creates or updates entry in the activity table
-  //TODO why is this async?
-  private async updateUserActivityAtRegistration() {
+  private updateUserActivityAtRegistration() {
     try {
       
       for (let i = 0; i < this.newlyRegisteredUsers.length; i++) {
@@ -446,8 +445,7 @@ export class SwarmChat {
   }
 
   // Used for Activity Analysis, saves last message timestamp into activity table
-  //TODO why is this async
-  private async updateUserActivityAtNewMessage(theNewMessage: MessageData) {
+  private updateUserActivityAtNewMessage(theNewMessage: MessageData) {
     try {
       this.logger.trace(`New message (updateUserActivityAtNewMessage):  ${theNewMessage}`);
 
@@ -582,15 +580,13 @@ export class SwarmChat {
       this.userFetchIsRunning = true;
     
       const feedReader = this.utils.graffitiFeedReaderFromTopic(this.bee, topic);
-     console.info(`Downloading UsersFeedCommit at index ${this.usersFeedIndex}`) 
       const feedEntry = await feedReader.download({ index: this.usersFeedIndex });
-    console.log(`feedEntry: ${feedEntry.reference}`)
       const data = await this.bee.downloadData(feedEntry.reference, { 
         headers: { 
           'Swarm-Redundancy-Level': "0"
         }
       });
-    console.log(`Data downloaded.`)
+
       const objectFromFeed = data.json() as unknown as UsersFeedCommit;
       this.logger.debug(`New UsersFeedCommit received!  ${objectFromFeed}`)
     
@@ -672,7 +668,7 @@ export class SwarmChat {
       if (!this.isRegistered(user.address)) {
         const newList = [...this.users, user];
         //this.utils.removeDuplicateUsers(newList);
-  
+  //TODO we are not waiting for this operation to finish, is that good?
         this.writeUsersFeedCommit(
           topic,
           stamp,
@@ -942,7 +938,7 @@ export class SwarmChat {
     }
   }
 
-  async host(roomTopic: string, stamp: BatchId) {
+  public async host(roomTopic: string, stamp: BatchId) {
     const isNode = typeof window === 'undefined' && typeof global !== 'undefined';
     if (!isNode) {
       this.handleError({
