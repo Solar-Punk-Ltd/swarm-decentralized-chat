@@ -418,6 +418,7 @@ export class SwarmChat {
   }
 
   // Used for Activity Analysis, creates or updates entry in the activity table
+  //TODO why is this async?
   private async updateUserActivityAtRegistration() {
     try {
       
@@ -445,6 +446,7 @@ export class SwarmChat {
   }
 
   // Used for Activity Analysis, saves last message timestamp into activity table
+  //TODO why is this async
   private async updateUserActivityAtNewMessage(theNewMessage: MessageData) {
     try {
       this.logger.trace(`New message (updateUserActivityAtNewMessage):  ${theNewMessage}`);
