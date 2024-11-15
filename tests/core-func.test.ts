@@ -165,3 +165,47 @@ describe('stopUserFetchProcess', () => {
     expect(chat.getDiagnostics().userFetchClockExists).toBe(false);
   });
 });
+
+
+describe('startMessageFetchProcess', () => {
+  let chat: SwarmChat;
+
+  beforeEach(() => {
+    chat = new SwarmChat();
+  });
+  
+  afterEach(() => {
+    jest.useRealTimers();
+    chat.stopMessageFetchProcess();
+  });
+
+  it('should periodically fetch messages', () => {
+    jest.useFakeTimers();
+    const readMessagesForAllSpy = jest.spyOn(chat as any, 'readMessagesForAll');
+    const mInterval = chat.getMessageCheckInterval();
+
+    chat.startMessageFetchProcess('example-chat');
+    jest.advanceTimersByTime(mInterval);                // Fast-forward time
+
+    expect(readMessagesForAllSpy).toHaveBeenCalledWith('example-chat');
+    expect(readMessagesForAllSpy).toHaveBeenCalledTimes(1);
+
+    jest.advanceTimersByTime(mInterval);
+    expect(readMessagesForAllSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('should clear previous intervals when called multiple times', () => {
+    jest.useFakeTimers();
+    const readMessagesForAllSpy = jest.spyOn(chat as any, 'readMessagesForAll');
+    const mInterval = chat.getMessageCheckInterval();
+
+    chat.startMessageFetchProcess('topic-1');
+    chat.startMessageFetchProcess('topic-2');
+
+    jest.advanceTimersByTime(mInterval);
+
+    expect(readMessagesForAllSpy).toHaveBeenCalledWith('topic-2');
+    expect(readMessagesForAllSpy).not.toHaveBeenCalledWith('topic-1');
+    expect(readMessagesForAllSpy).toHaveBeenCalledTimes(1);
+  });
+});
