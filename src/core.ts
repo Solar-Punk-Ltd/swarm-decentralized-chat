@@ -28,7 +28,7 @@ import { HexString } from '@anythread/gsoc/dist/types';
  * Swarm Decentralized Chat
  */
 export class SwarmChat {
-  /** Variables that will be constant for this SwarmChat instance */
+  /// Variables that will be constant for this SwarmChat instance
   private USERS_FEED_TIMEOUT: number;                                       // Timeout when writing UsersFeedCommit
   private REMOVE_INACTIVE_USERS_INTERVAL = 1 * MINUTE;
   private IDLE_TIME = 1 * MINUTE;                                           // User will be removed from readMessage loop after this time, until rejoin
@@ -46,7 +46,7 @@ export class SwarmChat {
   private MESSAGE_FETCH_MAX = 8 * SECOND;                                   // Highest message fetch frequency (ms)
   private F_STEP = 100;                                                     // Message fetch step (ms)
 
-  /** Actual variables, like Bee instance, messages, analytics, user list, etc */
+  /// Actual variables, like Bee instance, messages, analytics, user list, etc
   private bee = new Bee('http://localhost:1633');
   private emitter = new EventEmitter();
   private messages: MessageData[] = [];
@@ -889,6 +889,26 @@ export class SwarmChat {
   public getGsocAddress() {
     if (!this.gsocSubscribtion) return null;
     else return this.gsocSubscribtion.gsocAddress;
+  }
+
+  /** Returns the Bee instance that the library is using */
+  public getBeeInstance(): Bee {
+    return this.bee;
+  }
+  
+  /** Return the gateway (overlay address), gives back empty string, if no gateway */
+  public getGateway(): string {
+    return this.gateway;
+  }
+  
+  /** Returns the GSOC resource ID, gives back empty string, if not set */
+  public getGsocResourceId(): string {
+    return this.gsocResourceId;
+  }
+  
+  /** Returns the event emitter that is loaded in the instance */
+  public getEmitter(): EventEmitter {
+    return this.emitter;
   }
 
   private handleError(errObject: ErrorObject) {
