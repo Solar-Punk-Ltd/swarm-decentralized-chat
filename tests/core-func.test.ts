@@ -209,3 +209,31 @@ describe('startMessageFetchProcess', () => {
     expect(readMessagesForAllSpy).toHaveBeenCalledTimes(1);
   });
 });
+
+
+describe('stopMessageFetchProcess', () => {
+  let chat: SwarmChat;
+
+  beforeEach(() => {
+    chat = new SwarmChat();
+  });
+  
+  afterEach(() => {
+    jest.useRealTimers();
+    chat.stopMessageFetchProcess();
+  });
+
+  it('should clear the message fetch interval', () => {
+    jest.useFakeTimers();
+    const readMessagesForAllSpy = jest.spyOn(chat as any, 'readMessagesForAll');
+
+    chat.startMessageFetchProcess('example-chat');
+    expect(chat.getDiagnostics().messageFetchClockExists).toBe(true);
+    chat.stopMessageFetchProcess();
+
+    expect(readMessagesForAllSpy).toHaveBeenCalledTimes(0);
+
+    jest.advanceTimersByTime(chat.getMessageCheckInterval());
+    expect(chat.getDiagnostics().messageFetchClockExists).toBe(false);
+  });
+});
