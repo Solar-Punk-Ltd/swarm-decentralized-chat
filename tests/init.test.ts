@@ -1,5 +1,5 @@
 import { SwarmChat } from '../src/core';
-import { EVENTS, MINUTE, SECOND } from '../src/constants';
+import { MINUTE, SECOND } from '../src/constants';
 import { Bee } from '@ethersphere/bee-js';
 import { EventEmitter } from '../src/eventEmitter';
 
