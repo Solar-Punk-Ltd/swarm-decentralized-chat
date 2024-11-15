@@ -124,7 +124,7 @@ export class SwarmChat {
     this.messagesQueue = new AsyncQueue({ waitable: true, max: 4 }, this.handleError.bind(this), this.logger);
     this.reqTimeAvg = new RunningAverage(1000, this.logger);
 
-    console.info(`SwarmChat created, version: v0.1.8 or above`);
+    this.logger.info(`SwarmChat created, version: v0.1.16 or above`);
   }
 
   /** With getChatActions, it's possible to listen to events on front end or anywhere outside the library. 
@@ -206,7 +206,7 @@ export class SwarmChat {
     if (this.messageFetchClock) {
       clearInterval(this.messageFetchClock);
     }
-    this.messageFetchClock = setInterval(this.readMessagesForAll(topic), this.mInterval);
+    this.messageFetchClock = setInterval(() => this.readMessagesForAll(topic), this.mInterval);
   }
 
   /** The SwarmChat instance will stop polling for new messages on users' own feeds. */
