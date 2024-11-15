@@ -1,5 +1,7 @@
 import { SwarmChat } from "../src/core";
 import { EVENTS } from "../src/constants";
+import { EthAddress } from "../src/types";
+import { Wallet } from "ethers";
 
 
 describe('getChatActions', () => {
@@ -235,5 +237,36 @@ describe('stopMessageFetchProcess', () => {
 
     jest.advanceTimersByTime(chat.getMessageCheckInterval());
     expect(chat.getDiagnostics().messageFetchClockExists).toBe(false);
+  });
+});
+
+
+describe('isRegistered', () => {
+  afterAll(() => {
+    jest.resetAllMocks();
+  });
+
+  it('should return true for a registered user', () => {
+    const userAddr: EthAddress = Wallet.createRandom().address as EthAddress;
+    // We trust that the implementation of findIndex is correct, and mock findIndex
+    jest.spyOn(Array.prototype, 'findIndex').mockImplementation((predicate) => {
+      if (predicate({ address: userAddr }, 0, [])) return 0;
+      return -1;
+    });
+
+    const chat = new SwarmChat();
+    expect(chat.isRegistered(userAddr)).toBe(true);
+  });
+
+  it('should return false for an unregistered user', () => {
+    const registeredAddress: EthAddress = Wallet.createRandom().address as EthAddress;
+    const unregisteredAddress: EthAddress = Wallet.createRandom().address as EthAddress;
+    jest.spyOn(Array.prototype, 'findIndex').mockImplementation((predicate) => {
+      if (predicate({ address: registeredAddress }, 0, [])) return 0;
+      return -1;
+    });
+
+    const chat = new SwarmChat();
+    expect(chat.isRegistered(unregisteredAddress)).toBe(false);
   });
 });
