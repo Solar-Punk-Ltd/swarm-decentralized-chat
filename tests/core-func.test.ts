@@ -137,3 +137,31 @@ describe('startUserFetchProcess', () => {
     expect(tryUserFetchSpy).toHaveBeenCalledTimes(1);
   });
 });
+
+
+describe('stopUserFetchProcess', () => {
+  let chat: SwarmChat;
+
+  beforeEach(() => {
+    chat = new SwarmChat();
+  });
+  
+  afterEach(() => {
+    jest.useRealTimers();
+    chat.stopUserFetchProcess();
+  });
+
+  it('should clear the user fetch interval', () => {
+    jest.useFakeTimers();
+    const tryUserFetchSpy = jest.spyOn(chat as any, 'tryUserFetch');
+
+    chat.startUserFetchProcess('example-chat');
+    expect(chat.getDiagnostics().userFetchClockExists).toBe(true);
+    chat.stopUserFetchProcess();
+
+    expect(tryUserFetchSpy).toHaveBeenCalledTimes(0);
+
+    jest.advanceTimersByTime(chat['USER_UPDATE_INTERVAL']);
+    expect(chat.getDiagnostics().userFetchClockExists).toBe(false);
+  });
+});
