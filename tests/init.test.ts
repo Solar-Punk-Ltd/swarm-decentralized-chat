@@ -60,3 +60,13 @@ describe('SwarmChat initialization and configuration (constructor)', () => {
     expect(chat.getGsocResourceId()).toBe("resource-id-123");
   });
 });
+
+
+describe('changeBeeUrl', () => {
+  it('should change the bee url', () => {
+    const chat = new SwarmChat();
+    chat.changeBeeUrl("http://new-url.com:1633");
+
+    expect(chat.getBeeInstance().url).toBe("http://new-url.com:1633");
+  });
+});
