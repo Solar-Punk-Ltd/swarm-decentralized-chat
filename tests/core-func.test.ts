@@ -92,3 +92,48 @@ describe('getChatActions', () => {
     expect(listener2).not.toHaveBeenCalled();
   });
 });
+
+
+describe('startUserFetchProcess', () => {
+  let chat: SwarmChat;
+
+  beforeEach(() => {
+    chat = new SwarmChat();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+    chat.stopUserFetchProcess();
+  });
+
+  it('should periodically fetch user data', () => {
+    jest.useFakeTimers();
+    const tryUserFetchSpy = jest.spyOn(chat as any, 'tryUserFetch');
+    
+    chat.startUserFetchProcess('some-topic');
+    
+    // Fast-forward time by one interval
+    jest.advanceTimersByTime(chat['USER_UPDATE_INTERVAL']);
+    
+    expect(tryUserFetchSpy).toHaveBeenCalledWith('some-topic');
+    expect(tryUserFetchSpy).toHaveBeenCalledTimes(1);
+    
+    // Fast-forward by another interval to ensure it keeps running
+    jest.advanceTimersByTime(chat['USER_UPDATE_INTERVAL']);
+    expect(tryUserFetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('should clear previous interval when called multiple times', () => {
+    jest.useFakeTimers();
+    const tryUserFetchSpy = jest.spyOn(chat as any, 'tryUserFetch');
+    
+    chat.startUserFetchProcess('topic-1');
+    chat.startUserFetchProcess('topic-2');
+    
+    jest.advanceTimersByTime(chat['USER_UPDATE_INTERVAL']);
+    
+    expect(tryUserFetchSpy).toHaveBeenCalledWith('topic-2');
+    expect(tryUserFetchSpy).not.toHaveBeenCalledWith('topic-1');
+    expect(tryUserFetchSpy).toHaveBeenCalledTimes(1);
+  });
+});

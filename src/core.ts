@@ -955,6 +955,8 @@ export class SwarmChat {
       userActivityTable: this.userActivityTable,
       newlyResigeredUsers: this.newlyRegisteredUsers,
       requestCount: this.reqCount,
+      userFetchClockExists: this.userFetchClock !== null,
+      messageFetchClockExists: this.messageFetchClock !== null
     }
   }
 
