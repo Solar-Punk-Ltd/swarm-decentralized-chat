@@ -824,6 +824,7 @@ export class SwarmChat {
   /** Writes the users object, will avoid collision with other write operation
       Would cause a hot loop if usersLoading would be true, but we don't expect that to happen */
   private setUsers(newUsers: UserWithIndex[]) {
+    //TODO this whole thing is most likely not needed, because there is no concurrency in JS. It can not happen. There never will be a collision in this.users write.
     if (this.usersLoading) {
       return new Promise<void>((resolve) => {
         const interval = setInterval(() => {
@@ -867,12 +868,6 @@ export class SwarmChat {
   /** Returns the USER_UPDATE_INTERVAL constant, that can be set when creating a new SwarmChat instance */
   public getUserUpdateIntervalConst() {
     return this.USER_UPDATE_INTERVAL;
-  }
-
-  /** Clears the Users fetch queue, so we don't update user list with obsolate records */
-  public resetUsersQueue() {
-    //TODO most likely we won't use this
-    this.usersQueue.clearQueue();
   }
   
   /** Returns GSOC Subscription address or null */
