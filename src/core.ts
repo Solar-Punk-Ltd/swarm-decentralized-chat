@@ -549,7 +549,7 @@ export class SwarmChat {
     if (!this.userFetchIsRunning) {
       this.getNewUsers(topic);
     } else {
-      console.info("Previous getNewUsers is still running");
+      this.logger.info("Previous getNewUsers is still running");
     }
   }
 
