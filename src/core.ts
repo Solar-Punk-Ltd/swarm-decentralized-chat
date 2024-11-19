@@ -106,6 +106,7 @@ export class SwarmChat {
     this.F_STEP = settings.fStep || 100;                                                    // When interval is changed, it is changed by this value
     this.mInterval = settings.messageCheckInterval || this.MESSAGE_FETCH_MIN * 3;           // 3x times min, or user-specified
     
+    settings.prettier = true;
     const prettier = settings.prettier ? pinoPretty({                                       // Colorizing capability for logger
       colorize: true,
       translateTime: 'SYS:standard',
@@ -823,15 +824,21 @@ export class SwarmChat {
   /** Writes the users object, will avoid collision with other write operation
       Would cause a hot loop if usersLoading would be true, but we don't expect that to happen */
   private setUsers(newUsers: UserWithIndex[]) {
-    let success = false;
-    do {
-      if (!this.usersLoading) {
-        this.usersLoading = true;
-        this.users = newUsers;
-        this.usersLoading = false;
-        success = true;
-      }
-    } while (!success)
+    if (this.usersLoading) {
+      return new Promise<void>((resolve) => {
+        const interval = setInterval(() => {
+          if (!this.usersLoading) {
+            clearInterval(interval);
+            this.setUsers(newUsers);
+            resolve();
+          }
+        }, 50);
+      });
+    }
+
+    this.usersLoading = true;
+    this.users = newUsers;
+    this.usersLoading = false;
   }
 
   /** Emit event about state change */
