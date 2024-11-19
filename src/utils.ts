@@ -272,20 +272,31 @@ export class SwarmChatUtils {
   }
 
   /** selectUsersFeedCommitWriter will select a user who will write a UsersFeedCommit object to the feed */
-  selectUsersFeedCommitWriter(activeUsers: UserWithIndex[], emitStateEvent: (event: string, value: any) => void): EthAddress {
+  async selectUsersFeedCommitWriter(activeUsers: UserWithIndex[], emitStateEvent: (event: string, value: any) => void): Promise<EthAddress> {
     const minUsersToSelect = 1;
     const numUsersToselect = Math.max(Math.ceil(activeUsers.length * 0.3), minUsersToSelect);     // Select top 30% of activeUsers, but minimum 1
     const mostActiveUsers = activeUsers.slice(0, numUsersToselect);                               // Top 30% but minimum 3 (minUsersToSelect)
 
     this.logger.debug(`Most active users:  ${mostActiveUsers}`);
     const sortedMostActiveAddresses = mostActiveUsers.map((user) => user.address).sort();
-    //const seedString = sortedMostActiveAddresses.join(',');                                       // All running instances should have the same string at this time
+    const seedString = sortedMostActiveAddresses.join(',');                                       // All running instances should have the same string at this time
     //const hash = crypto.createHash('sha256').update(seedString).digest('hex');                    // Hash should be same in all computers that are in this chat
-    //emitStateEvent(EVENTS.FEED_COMMIT_HASH, hash);
-    //const randomIndex = parseInt(hash, 16) % mostActiveUsers.length;                              // They should have the same number, thus, selecting the same user
-    const randomIndex = Math.floor(Math.random() * sortedMostActiveAddresses.length);
+    const hash = await this.generateHash(seedString);
+    emitStateEvent(EVENTS.FEED_COMMIT_HASH, hash);
+    const randomIndex = parseInt(hash, 16) % mostActiveUsers.length;                              // They should have the same number, thus, selecting the same user
+    //const randomIndex = Math.floor(Math.random() * sortedMostActiveAddresses.length);
     
     return mostActiveUsers[randomIndex].address;
+  }
+
+  /** Generate SHA256 hash, will output a string */
+  async generateHash(seedString: string): Promise<string> {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(seedString);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    return hashHex;
   }
 
   /** Gives back the currently active users, based on idle time and user count limit calculation */
