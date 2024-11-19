@@ -404,17 +404,8 @@ export class SwarmChat {
 
   // Every User is doing Activity Analysis, and one of them is selected to write the UsersFeed
   private startActivityAnalyzes(topic: string, ownAddress: EthAddress, stamp: BatchId) {
-    try {
-      this.logger.info("Starting Activity Analysis...");
-      this.removeIdleUsersInterval = setInterval(() => this.removeIdleUsers(topic, ownAddress, stamp), this.REMOVE_INACTIVE_USERS_INTERVAL);
-
-    } catch (error) {
-      this.handleError({
-        error: error as unknown as Error,
-        context: `startActivityAnalyzes`,
-        throw: false
-      });
-    }
+    this.logger.info("Starting Activity Analysis...");
+    this.removeIdleUsersInterval = setInterval(() => this.removeIdleUsers(topic, ownAddress, stamp), this.REMOVE_INACTIVE_USERS_INTERVAL);
   }
 
   // Used for Activity Analysis, creates or updates entry in the activity table
@@ -530,7 +521,6 @@ export class SwarmChat {
 
       const feedWriter = this.utils.graffitiFeedWriterFromTopic(this.bee, topic, { timeout: this.USERS_FEED_TIMEOUT });
 
-     // new code 
       if (!this.usersFeedIndex) {
         console.info("Fetching current index...")
         try {
@@ -956,10 +946,12 @@ export class SwarmChat {
       newlyResigeredUsers: this.newlyRegisteredUsers,
       requestCount: this.reqCount,
       userFetchClockExists: this.userFetchClock !== null,
-      messageFetchClockExists: this.messageFetchClock !== null
+      messageFetchClockExists: this.messageFetchClock !== null,
+      removeInactiveUsersInterval: this.REMOVE_INACTIVE_USERS_INTERVAL
     }
   }
 
+  /** In gateway mode, the host will init the chat, and add new users to the Users feed */
   public async host(roomTopic: string, stamp: BatchId) {
     const isNode = typeof window === 'undefined' && typeof global !== 'undefined';
     if (!isNode) {
@@ -979,5 +971,21 @@ export class SwarmChat {
     do {
       await this.utils.sleep(5000);
     } while (true)
+  }
+
+  /** Stop all intervals */
+  public stop() {
+    if (this.removeIdleUsersInterval) {
+      clearInterval(this.removeIdleUsersInterval);
+      this.removeIdleUsersInterval = null;
+    }
+    if (this.userFetchClock) {
+      clearInterval(this.userFetchClock);
+      this.userFetchClock = null;
+    }
+    if (this.messageFetchClock) {
+      clearInterval(this.messageFetchClock);
+      this.messageFetchClock = null;
+    }
   }
 }
