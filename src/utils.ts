@@ -302,25 +302,26 @@ export class SwarmChatUtils {
     const idleMs: IdleMs = {};
     const now = Date.now();
 
-    for (const rawKey in userActivityTable) {
-      const key = rawKey as unknown as EthAddress;
-      if (!userActivityTable[key]) {
-        userActivityTable[key] = {
-          timestamp: now,       // this used to be user.timestamp, but it is possibly causing a bug
-          readFails: 0
-        }
+    // Ensure all users have an entry in userActivityTable
+    users.forEach(user => {
+      if (!userActivityTable[user.address]) {
+        userActivityTable[user.address] = { timestamp: now, readFails: 0 };
       }
-      idleMs[key] = now - userActivityTable[key].timestamp;
-    }
-
-    this.logger.debug(`Users inside removeIdle:  ${users}`)
-
-    const activeUsers = users.filter((user) => {
-      return idleMs[user.address] < idleTime;
     });
 
-    // Sort activeUsers by their last activity timestamp (most recent first)
-    const sortedActiveUsers = activeUsers.sort((a, b) => userActivityTable[b.address].timestamp - userActivityTable[a.address].timestamp);
+    // Calculate idle time for each user
+    for (const user of users) {
+      idleMs[user.address] = now - userActivityTable[user.address].timestamp;
+    }
+    
+    this.logger.debug(`Users inside removeIdle: ${users}`);
+    const activeUsers = users.filter((user) => {
+      return idleMs[user.address] <= idleTime;
+    });
+
+    const sortedActiveUsers = activeUsers.sort((a, b) => 
+      userActivityTable[b.address].timestamp - userActivityTable[a.address].timestamp
+    );
 
     return sortedActiveUsers.slice(0, limit);
   }
