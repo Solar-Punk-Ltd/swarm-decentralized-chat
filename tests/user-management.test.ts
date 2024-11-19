@@ -1,4 +1,4 @@
-import { Signature, Wallet } from "ethers";
+import { ethers, Signature, Wallet } from "ethers";
 import { SwarmChat } from "../src/core";
 import { EthAddress, MessageData, UserWithIndex } from "../src/types";
 import { BatchId } from "@ethersphere/bee-js";
@@ -222,5 +222,118 @@ describe('setUsers', () => {
     expect(setUsersSpy).toHaveBeenCalledTimes(1);
     expect(chat['users']).not.toEqual(newUsers);
     expect(chat['usersLoading']).toBe(true);
+  });
+});
+
+
+describe('validateUserObject', () => {
+  let chat: SwarmChat;
+  let handleErrorSpy: jest.SpyInstance;
+  let validateUserSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    chat = new SwarmChat();
+    handleErrorSpy = jest.spyOn((chat as any).utils, 'handleError');
+    validateUserSpy = jest.spyOn((chat as any).utils, 'validateUserObject');
+  });
+
+  afterEach(() => {
+    handleErrorSpy.mockRestore();
+    validateUserSpy.mockRestore();
+  });
+
+  it('should validate property types', () => {
+    const invalidUsername = { username: 3, address: "0x123", timestamp: 123, signature: "signature" };
+    const invalidAddress = { username: "Alice", address: false, timestamp: 123, signature: "signature" };
+    const invalidTimestamp = { username: "Alice", address: "0x123", timestamp: "123", signature: "signature" };
+    const invalidSignatureType = { username: "Alice", address: "0x123", timestamp: 123, signature: 42 };
+
+    (chat as any).utils.validateUserObject(invalidUsername);
+    expect(handleErrorSpy).toHaveBeenCalledWith({
+      error: "username should be a string",
+      context: 'This User object is not correct',
+      throw: false
+    });
+    handleErrorSpy.mockClear();
+
+    (chat as any).utils.validateUserObject(invalidAddress);
+    expect(handleErrorSpy).toHaveBeenCalledWith({
+      error: "address should be a string",
+      context: 'This User object is not correct',
+      throw: false
+    });
+    handleErrorSpy.mockClear();
+
+    (chat as any).utils.validateUserObject(invalidTimestamp);
+    expect(handleErrorSpy).toHaveBeenCalledWith({
+      error: "timestamp should be number",
+      context: 'This User object is not correct',
+      throw: false
+    });
+    handleErrorSpy.mockClear();
+
+    (chat as any).utils.validateUserObject(invalidSignatureType);
+    expect(handleErrorSpy).toHaveBeenCalledWith({
+      error: "signature should be a string",
+      context: 'This User object is not correct',
+      throw: false
+    });
+
+    expect(validateUserSpy).toHaveLastReturnedWith(false);
+
+    handleErrorSpy.mockRestore();
+  });
+
+  it('should not contain extra properties',  () => {
+    const extraProperty = { username: "Alice", address: "0x123", timestamp: 123, signature: "signature", notAllowedExtraProperty: "rabbit" };
+
+    (chat as any).utils.validateUserObject(extraProperty);
+    
+    expect(handleErrorSpy).toHaveBeenCalledWith({
+      error: "Unexpected properties found: notAllowedExtraProperty",
+      context: 'This User object is not correct',
+      throw: false
+    });
+
+    expect(validateUserSpy).toHaveLastReturnedWith(false);
+  });
+
+  it('should validate signature', () => {
+    const invalidSignature = { 
+      username: "Alice",
+      address: "0x123",
+      timestamp: 123,
+      signature: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb1b" };
+
+    (chat as any).utils.validateUserObject(invalidSignature);
+
+    expect(handleErrorSpy).toHaveBeenCalledWith({
+      error: "Signature verification failed!",
+      context: 'This User object is not correct',
+      throw: false
+    });
+
+    expect(validateUserSpy).toHaveLastReturnedWith(false);
+  });
+
+  it('should accept correct user object', async () => {
+    const username = "Alice";
+    const wallet = Wallet.createRandom();
+    const address = wallet.address;
+    const timestamp = Date.now();
+    const signature = await wallet.signMessage(
+      JSON.stringify({ username, address, timestamp })
+    );
+
+    const userObject = {
+      username,
+      address,
+      timestamp,
+      signature
+    };
+
+    (chat as any).utils.validateUserObject(userObject);
+
+    expect(validateUserSpy).toHaveLastReturnedWith(true);
   });
 });
