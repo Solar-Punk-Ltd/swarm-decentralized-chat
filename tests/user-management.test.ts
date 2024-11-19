@@ -1,9 +1,9 @@
 import { Wallet } from "ethers";
 import { SwarmChat } from "../src/core";
-import { EthAddress, MessageData, UserWithIndex } from "../src/types";
+import { EthAddress, MessageData, User, UserActivity, UserWithIndex } from "../src/types";
 import { BatchId } from "@ethersphere/bee-js";
-import { userListWithNUsers } from "./fixtures";
-import { EVENTS } from "../src/constants";
+import { createMockActivityTable, userListWithNUsers } from "./fixtures";
+import { EVENTS, MINUTE } from "../src/constants";
 
 
 describe('startActivityAnalyses', () => {
@@ -477,5 +477,75 @@ describe('selectUsersFeedCommitWriter', () => {
   it('should handle empty user list', async () => {
     await expect((chat as any).utils.selectUsersFeedCommitWriter([], mockEmitStateEvent))
       .rejects.toThrow();
+  });
+});
+
+
+describe('getActiveUsers', () => {
+  let chat: SwarmChat;
+
+  beforeEach(() => {
+    chat = new SwarmChat();
+  });
+
+  it('should return all users within idle time', async () => {
+    const now = Date.now();
+    const users = await userListWithNUsers(3);
+    const userActivityTable = createMockActivityTable(users, [
+      now - 1000,
+      now - 1000,
+      now - 1000 
+    ]);
+    const idleTime = 2000;
+
+    const activeUsers = (chat as any).utils.getActiveUsers(users, userActivityTable, idleTime);
+
+    expect(activeUsers.length).toBe(3);
+  });
+
+  it('should filter out users beyond idle time', async () => {
+    const now = Date.now();
+    const users = await userListWithNUsers(3);
+    const userActivityTable = createMockActivityTable(users, [
+      now - 3000,  // idle user
+      now - 1000,  // recent user
+      now - 2500   // idle user
+    ]);
+    const idleTime = 2000;
+
+    const activeUsers = (chat as any).utils.getActiveUsers(users, userActivityTable, idleTime);
+
+    expect(activeUsers.length).toBe(1);
+    expect(activeUsers[0].address).toBe(users[1].address);
+  });
+
+  it('should handle missing activity table entries', async () => {
+    const now = Date.now();
+    const users = await userListWithNUsers(3);
+    const userActivityTable: UserActivity = {};
+    const idleTime = 10 * MINUTE;
+
+    const activeUsers: User[] = (chat as any).utils.getActiveUsers(users, userActivityTable, idleTime);
+
+    expect(activeUsers.length).toBe(3);
+    expect(activeUsers.every(user => 
+      userActivityTable[user.address] && 
+      userActivityTable[user.address].timestamp === now
+    )).toBe(true);
+  });
+
+  it('should return empty array if no users are active', async () => {
+    const now = Date.now();
+    const users = await userListWithNUsers(3);
+    const userActivityTable = createMockActivityTable(users, [
+      now - 5000,  // idle user
+      now - 6000,  // very idle user
+      now - 7000   // extremely idle user
+    ]);
+    const idleTime = 2000;
+
+    const activeUsers = (chat as any).utils.getActiveUsers(users, userActivityTable, idleTime);
+
+    expect(activeUsers.length).toBe(0);
   });
 });

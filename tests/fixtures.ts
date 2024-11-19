@@ -1,6 +1,6 @@
 import { Signature, Wallet } from "ethers";
-import { HOUR } from "../src/constants";
-import { EthAddress } from "../src/types";
+import { HOUR, MINUTE, SECOND } from "../src/constants";
+import { EthAddress, User, UserActivity } from "../src/types";
 
 
 /**
@@ -10,8 +10,8 @@ import { EthAddress } from "../src/types";
  * @returns A promise resolving to an array of user entries (newlyRegisteredUsers).
  */
 export async function userListWithNUsers(n: number) {
-  const HOUR = 60 * 60 * 1000; // Assuming HOUR constant is defined elsewhere
-  const timestamps = Array.from({ length: n }, (_, i) => Date.now() - i * HOUR);
+  const HOUR = 60 * 60 * 1000;
+  const timestamps = Array.from({ length: n }, (_, i) => Date.now() - i * MINUTE);
   const wallets = Array.from({ length: n }, () => Wallet.createRandom());
   const usernames = generateAlphabeticalNames(n);
   const addresses = wallets.map((wallet) => wallet.address as EthAddress);
@@ -48,4 +48,17 @@ function generateAlphabeticalNames(n: number): string[] {
     names.push(baseNames[i % baseNames.length] + (i >= baseNames.length ? ` ${Math.floor(i / baseNames.length)}` : ""));
   }
   return names;
+}
+
+export function createMockActivityTable(users: User[], timestamps: number[] = []): UserActivity {
+  return users.reduce((acc, user, index) => {
+    // If timestamps array is provided, use the value from the array; otherwise, use the user's timestamp
+    const userTimestamp = timestamps[index] || user.timestamp;
+    
+    acc[user.address] = {
+      timestamp: userTimestamp,
+      readFails: 0
+    };
+    return acc;
+  }, {} as UserActivity);
 }
