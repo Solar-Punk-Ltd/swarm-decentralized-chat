@@ -450,6 +450,24 @@ export class SwarmChatUtils {
       });
     }
   }
+
+  validateMessageData(data: any): asserts data is MessageData {
+    if (typeof data !== 'object' || data === null) {
+      throw new Error('Message data must be an object.');
+    }
+    if (typeof data.message !== 'string') {
+      throw new Error('Message field must be a string.');
+    }
+    if (typeof data.username !== 'string') {
+      throw new Error('Username field must be a string.');
+    }
+    if (typeof data.address !== 'string' || !/^0x[a-fA-F0-9]{40}$/.test(data.address)) {
+      throw new Error('Address must be a valid Ethereum address.');
+    }
+    if (typeof data.timestamp !== 'number' || isNaN(data.timestamp)) {
+      throw new Error('Timestamp must be a valid number.');
+    }
+  }
 }
 
 // Calculates and stores average, used for request time averaging
