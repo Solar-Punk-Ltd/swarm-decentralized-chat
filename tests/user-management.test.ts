@@ -5,6 +5,11 @@ import { BatchId } from "@ethersphere/bee-js";
 import { createMockActivityTable, userListWithNUsers } from "./fixtures";
 import { EVENTS, MINUTE } from "../src/constants";
 
+import { InformationSignal } from "@anythread/gsoc";
+jest.mock('@anythread/gsoc', () => ({
+  InformationSignal: jest.fn()
+}));
+
 
 describe('startActivityAnalyses', () => {
   let chat: SwarmChat;
@@ -547,5 +552,98 @@ describe('getActiveUsers', () => {
     const activeUsers = (chat as any).utils.getActiveUsers(users, userActivityTable, idleTime);
 
     expect(activeUsers.length).toBe(0);
+  });
+});
+
+
+describe('subscribeToGsoc', () => {
+  let chat: SwarmChat;
+  let mockInformationSignal: {
+    subscribe: jest.Mock;
+  };
+
+  beforeEach(() => {
+    chat = new SwarmChat();
+    (InformationSignal as jest.Mock).mockClear();
+    mockInformationSignal = {
+      subscribe: jest.fn().mockReturnValue({ unsubscribe: jest.fn() })
+    };
+    (InformationSignal as jest.Mock).mockImplementation(() => mockInformationSignal);
+
+    jest.spyOn(chat['logger'], 'info').mockImplementation();
+    jest.spyOn(chat['logger'], 'debug').mockImplementation();
+    jest.spyOn(chat as any, 'handleError').mockImplementation();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('should throw error if resourceId is not provided', () => {
+    const url = 'http://test-url.com';
+    const stamp = 'test-stamp';
+    const topic = 'test-topic';
+    const callback = jest.fn();
+
+    expect(() => {
+      (chat as any).utils.subscribeToGsoc(url, stamp, topic, null as any, callback);
+    }).toThrow('Error in subscribeToGSOC');
+  });
+
+  it('should create InformationSignal with correct parameters', () => {
+    const url = 'http://test-url.com';
+    const stamp = '123456789abcdef';
+    const topic = 'test-topic';
+    const resourceId = '4a0f000000000000000000000000000000000000000000000000000000000000';
+    const callback = jest.fn();
+
+    const mockSubscribe = jest.fn().mockReturnValue({ unsubscribe: jest.fn() });
+    (InformationSignal as jest.Mock).mockImplementation(() => ({
+      subscribe: mockSubscribe
+    }));
+
+    (chat as any).utils.subscribeToGsoc(url, stamp, topic, resourceId, callback);
+
+    expect(InformationSignal).toHaveBeenCalledWith(url, {
+      postageBatchId: stamp,
+      consensus: {
+        id: `SwarmDecentralizedChat::${topic}`,
+        assertRecord: expect.any(Function)
+      }
+    });
+  });
+
+  it('should call callback with correct parameters on message', () => {
+    const url = 'http://test-url.com';
+    const stamp = '123456789abcdef';
+    const topic = 'test-topic';
+    const resourceId = '4a0f000000000000000000000000000000000000000000000000000000000000';
+    const callback = jest.fn();
+
+    (chat as any).utils.subscribeToGsoc(url, stamp, topic, resourceId, callback);
+
+    // Get the subscribe method and call its onMessage
+    const subscribeMethod = mockInformationSignal.subscribe;
+    const onMessageFn = subscribeMethod.mock.calls[0][0].onMessage;
+
+    // Simulate receiving a message
+    const testMessage = JSON.stringify({ username: 'testuser' });
+    onMessageFn(testMessage);
+
+    expect((chat as any).logger.info).toHaveBeenCalledWith('Registration object received, calling userRegisteredThroughGsoc');
+    expect((chat as any).logger.debug).toHaveBeenCalledWith('gsoc message: ', testMessage);
+    expect(callback).toHaveBeenCalledWith(topic, stamp, testMessage);
+  });
+
+  it('should return subscription object', () => {
+    const url = 'http://test-url.com';
+    const stamp = 'test-stamp';
+    const topic = 'test-topic';
+    const resourceId = '0x123';
+    const callback = jest.fn();
+
+    const result = (chat as any).utils.subscribeToGsoc(url, stamp, topic, resourceId, callback);
+
+    expect(result).toEqual({ unsubscribe: expect.any(Function) });
   });
 });
