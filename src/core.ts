@@ -437,23 +437,14 @@ export class SwarmChat {
 
   /** Used for Activity Analysis, saves last message timestamp into activity table */
   private updateUserActivityAtNewMessage(theNewMessage: MessageData) {
-    try {
-      this.logger.trace(`New message (updateUserActivityAtNewMessage):  ${theNewMessage}`);
+    this.logger.trace(`New message (updateUserActivityAtNewMessage):  ${theNewMessage}`);
 
-      this.userActivityTable[theNewMessage.address] = {
-        timestamp: theNewMessage.timestamp,
-        readFails: 0
-      }
-
-      this.logger.trace(`User Activity Table (new message received):  ${this.userActivityTable}`);
-
-    } catch (error) {
-      this.handleError({
-        error: error as unknown as Error,
-        context: `updateUserActivityAtNewMessage`,
-        throw: false
-      });
+    this.userActivityTable[theNewMessage.address] = {
+      timestamp: theNewMessage.timestamp,
+      readFails: 0
     }
+
+    this.logger.trace(`User Activity Table (new message received):  ${this.userActivityTable}`);
   }
 
   /** Every user is taking part in removeIdleUsers (Activity Analysis), but only one of them will be selected, for writting the Users feed 
@@ -725,6 +716,7 @@ export class SwarmChat {
         }
       });
       const messageData = JSON.parse(new TextDecoder().decode(data)) as MessageData;
+      this.utils.validateMessageData(messageData);
     
       const uIndex = this.users.findIndex((u) => (u.address === user.address));
       const newUsers = this.users;
