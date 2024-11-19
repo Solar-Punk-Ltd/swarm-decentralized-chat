@@ -1,6 +1,6 @@
 import { Signature, Wallet } from "ethers";
 import { SwarmChat } from "../src/core";
-import { EthAddress } from "../src/types";
+import { EthAddress, MessageData } from "../src/types";
 import { BatchId } from "@ethersphere/bee-js";
 import { HOUR } from "../src/constants";
 import { initializeNewlyRegisteredWith3Users } from "./fixtures";
@@ -36,9 +36,7 @@ describe('updateUserActivityAtRegistration', () => {
   let chat: SwarmChat;
   
   beforeEach(() => {
-    chat = new SwarmChat();
-    
-    jest.useRealTimers();
+    chat = new SwarmChat();    
   });
 
   it('should add the new users to the userActivityTable', async () => {
@@ -89,7 +87,6 @@ describe('updateUserActivityAtRegistration', () => {
 
   it('should handle errors gracefully', async () => {
     const handleErrorSpy = jest.spyOn(chat as any, 'handleError');
-    const error = new Error('Test error');
     
     chat['newlyRegisteredUsers'] = undefined as any;
 
@@ -100,5 +97,54 @@ describe('updateUserActivityAtRegistration', () => {
       context: 'updateUserActivityAtRegistration',
       throw: false
     });
+  });
+});
+
+
+describe('updateUserActivityAtNewMessage', () => {
+  it('should update the timestamp when new message is received', async () => {
+    let chat = new SwarmChat();
+    let users = await initializeNewlyRegisteredWith3Users();
+
+    for (let i = 0; i < users.length; i++) {
+      chat['userActivityTable'][users[i].address] = {
+        timestamp: users[i].timestamp,
+        readFails: 0
+      }
+    }
+
+    const now = Date.now();
+    const message: MessageData = {
+      message: "Alice says Hi!",
+      username: users[0].username,
+      address: users[0].address,
+      timestamp: now
+    };
+    (chat as any).updateUserActivityAtNewMessage(message);
+
+    expect(chat.getDiagnostics().userActivityTable[users[0].address].timestamp).toBe(now);
+    expect(chat.getDiagnostics().userActivityTable[users[0].address].readFails).toBe(0);
+  });
+
+  it('should handle multiple sequential updates for same user', async () => {
+    let chat = new SwarmChat();
+    let users = await initializeNewlyRegisteredWith3Users();
+    
+    const timestamps = [Date.now(), Date.now() + 100, Date.now() + 200];
+    
+    for (const timestamp of timestamps) {
+      const message: MessageData = {
+        message: `Message at ${timestamp}`,
+        username: users[0].username,
+        address: users[0].address,
+        timestamp: timestamp
+      };
+      
+      (chat as any).updateUserActivityAtNewMessage(message);
+      
+      const activity = chat.getDiagnostics().userActivityTable[users[0].address];
+      expect(activity.timestamp).toBe(timestamp);
+      expect(activity.readFails).toBe(0);
+    }
   });
 });
