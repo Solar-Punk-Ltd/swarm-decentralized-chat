@@ -81,7 +81,7 @@ export class SwarmChat {
     loadingRegistration: false,
   };
 
-  // Constructor, static variables will get value here
+  /** Constructor, static variables will get value here  */
   constructor(settings: ChatSettings = {}, beeInstance?: Bee, eventEmitter?: EventEmitter) {
     this.bee = beeInstance || new Bee(settings.url || 'http://localhost:1633');
     this.gateway = settings.gateway || "";                                                  // If exists, SwarmChat will run in gateway mode
@@ -402,16 +402,16 @@ export class SwarmChat {
     return this.utils.orderMessages(messages);
   }
 
-  // Every User is doing Activity Analysis, and one of them is selected to write the UsersFeed
+  /** Every User is doing Activity Analysis, and one of them is selected to write the UsersFeed */
   private startActivityAnalyzes(topic: string, ownAddress: EthAddress, stamp: BatchId) {
     this.logger.info("Starting Activity Analysis...");
     this.removeIdleUsersInterval = setInterval(() => this.removeIdleUsers(topic, ownAddress, stamp), this.REMOVE_INACTIVE_USERS_INTERVAL);
   }
 
-  // Used for Activity Analysis, creates or updates entry in the activity table
+  /** Used for Activity Analysis, creates or updates entry in the activity table */
   private updateUserActivityAtRegistration() {
     try {
-      
+
       for (let i = 0; i < this.newlyRegisteredUsers.length; i++) {
         const address = this.newlyRegisteredUsers[i].address;
         this.logger.info(`New user registered. Inserting ${this.newlyRegisteredUsers[i].timestamp} to ${address}`);
@@ -435,7 +435,7 @@ export class SwarmChat {
     }
   }
 
-  // Used for Activity Analysis, saves last message timestamp into activity table
+  /** Used for Activity Analysis, saves last message timestamp into activity table */
   private updateUserActivityAtNewMessage(theNewMessage: MessageData) {
     try {
       this.logger.trace(`New message (updateUserActivityAtNewMessage):  ${theNewMessage}`);
@@ -456,8 +456,8 @@ export class SwarmChat {
     }
   }
 
-  // Every user is taking part in removeIdleUsers (Activity Analysis), but only one of them will be selected, for writting the Users feed 
-  // This selection is pseudo-random, and it should select the same user in every app instance
+  /** Every user is taking part in removeIdleUsers (Activity Analysis), but only one of them will be selected, for writting the Users feed 
+      This selection is pseudo-random, and it should select the same user in every app instance */
   private async removeIdleUsers(topic: string, ownAddress: EthAddress, stamp: BatchId) {
     try {
       if (this.reqCount < 32) return; // Newly registered users shouldn't take part in this.
@@ -506,7 +506,7 @@ export class SwarmChat {
     }
   }
 
-  // Write a UsersFeedCommit to the Users feed, which might remove some inactive users from the readMessagesForAll loop
+  /** Write a UsersFeedCommit to the Users feed, which might remove some inactive users from the readMessagesForAll loop */
   private async writeUsersFeedCommit(topic: string, stamp: BatchId, activeUsers: UserWithIndex[]) {
     try {
       this.logger.info("The user was selected for submitting the UsersFeedCommit! (removeIdleUsers)");
@@ -553,7 +553,7 @@ export class SwarmChat {
     }
   }
 
-  // Adds a getNewUsers to the usersQueue, which will fetch new users
+  /** Adds a getNewUsers to the usersQueue, which will fetch new users  */
   private tryUserFetch(topic: string) {
     if (!this.userFetchIsRunning) {
       this.getNewUsers(topic);
@@ -641,6 +641,7 @@ export class SwarmChat {
     }
   }
 
+  /** When in gateway mode, the Gateway (aggregator) will add the new user to the Users feed with this function */
   private userRegisteredThroughGsoc(topic: string, stamp: BatchId, gsocMessage: string) {
     try {
       // Validation happens in subscribeToGsoc
@@ -679,7 +680,7 @@ export class SwarmChat {
     }
   }
 
-  // Goes through the users object, and enqueues a readMessage for each assumably active user
+  /** Goes through the users object, and enqueues a readMessage for each assumably active user  */
   private readMessagesForAll(topic: string) {
     return async () => {
       const isWaiting = await this.messagesQueue.waitForProcessing();
@@ -695,7 +696,7 @@ export class SwarmChat {
     };
   }
 
-  // Reads one message, from a user's own feed
+  /** Reads one message, from a user's own feed */
   private async readMessage(user: UserWithIndex, rawTopic: string) {
     try {
       const chatID = this.utils.generateUserOwnedFeedId(rawTopic, user.address);
@@ -765,7 +766,7 @@ export class SwarmChat {
     }
   }
 
-  // Adjusts maxParallel and message fetch interval
+  /** Adjusts maxParallel and message fetch interval */
   //TODO this might be an utils function, but we need to pass a lot of paramerers, and in the other direction as well (return)
   private adjustParamerets(topic: string) {
     // Adjust max parallel request count, based on avg request time, which indicates, how much the node is overloaded
@@ -827,8 +828,8 @@ export class SwarmChat {
     }
   }
 
-  // Writes the users object, will avoid collision with other write operation
-  // Would cause a hot loop if usersLoading would be true, but we don't expect that to happen
+  /** Writes the users object, will avoid collision with other write operation
+      Would cause a hot loop if usersLoading would be true, but we don't expect that to happen */
   private setUsers(newUsers: UserWithIndex[]) {
     let success = false;
     do {
@@ -841,7 +842,7 @@ export class SwarmChat {
     } while (!success)
   }
 
-  // Emit event about state change
+  /** Emit event about state change */
   private emitStateEvent(event: string, value: any) {
     if (this.eventStates[event] !== value) {
       this.eventStates[event] = value;
