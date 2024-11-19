@@ -90,7 +90,7 @@ export class SwarmChat {
     
     this.USERS_FEED_TIMEOUT = settings.usersFeedTimeout || 8 * SECOND;                      // Can adjust UsersFeedCommit write timeout, but higher values might cause SocketHangUp in Bee
     this.REMOVE_INACTIVE_USERS_INTERVAL = settings.removeInactiveInterval || 1 * MINUTE;    // How often run removeIdleUsers
-    this.IDLE_TIME = settings.idleTime || 1 * MINUTE;                                       // Can adjust idle time, after that, usser is inactive (messages not polled)
+    this.IDLE_TIME = settings.idleTime || 10 * MINUTE;                                      // Can adjust idle time, after that, usser is inactive (messages not polled)
     this.USER_LIMIT = settings.userLimit || 20;                                             // Overwrites IDLE_TIME, maximum active users
 
     this.USER_UPDATE_INTERVAL = settings.userUpdateInterval || 8 * SECOND;                  // Burnt-in value of user update interval (will not change)

@@ -421,8 +421,8 @@ export class SwarmChatUtils {
 
       const gsocSub = informationSignal.subscribe({
           onMessage: (msg: string) => {
-            console.log('Registration object received, calling userRegisteredThroughGsoc');
-            console.log("gsoc message: ", msg)
+            this.logger.info('Registration object received, calling userRegisteredThroughGsoc');
+            this.logger.debug("gsoc message: ", msg)
             callback(topic, stamp, msg);
           }, 
           onError: console.log
@@ -433,6 +433,7 @@ export class SwarmChatUtils {
       return gsocSub;
 
     } catch (error) {
+      console.error(error)
       this.handleError({
         error: error as unknown as Error,
         context: `subscribeToGSOC`,

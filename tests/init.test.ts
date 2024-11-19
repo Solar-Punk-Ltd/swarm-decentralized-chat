@@ -28,7 +28,7 @@ describe('SwarmChat initialization and configuration (constructor)', () => {
   it('constructor should use default values when no settings provided', async () => {
     const chat = new SwarmChat();
     
-    expect(chat.getIdleConst()).toBe(1 * MINUTE);
+    expect(chat.getIdleConst()).toBe(10 * MINUTE);
     expect(chat.getMessageCheckInterval()).toBe(900);
     expect(chat.getUserUpdateIntervalConst()).toBe(8 * SECOND);
     expect(chat.getDiagnostics().maxParallel).toBe(4);
