@@ -148,3 +148,47 @@ describe('updateUserActivityAtNewMessage', () => {
     }
   });
 });
+
+
+describe('tryUserFetch', () => {
+  it('should not start getNewUsers if userFetchIsRunning is true', () => {
+    const chat = new SwarmChat();
+    const topic = 'test-topic';
+    const getNewUsersSpy = jest.spyOn(chat as any, 'getNewUsers');
+    
+    (chat as any).userFetchIsRunning = true;
+    (chat as any).tryUserFetch(topic);
+    
+    expect(getNewUsersSpy).not.toHaveBeenCalled();
+    
+    getNewUsersSpy.mockRestore();
+  });
+
+  it('should start getNewUsers if userFetchIsRunning is false', () => {
+    const chat = new SwarmChat();
+    const topic = 'test-topic';
+    const getNewUsersSpy = jest.spyOn(chat as any, 'getNewUsers');
+    const consoleSpy = jest.spyOn(console, 'info');
+    
+    (chat as any).userFetchIsRunning = false;
+    (chat as any).tryUserFetch(topic);
+    
+    expect(getNewUsersSpy).toHaveBeenCalledWith(topic);
+    expect(consoleSpy).not.toHaveBeenCalled();
+    
+    getNewUsersSpy.mockRestore();
+    consoleSpy.mockRestore();
+  });
+
+  it('should write log if log level is info', () => {
+    const chat = new SwarmChat({ prettier: true, logLevel: 'info' });
+    const topic = 'test-topic';
+    const consoleSpy = jest.spyOn((chat as any).logger, 'info');
+    
+    (chat as any).userFetchIsRunning = true;
+    (chat as any).tryUserFetch(topic);
+    
+    expect(consoleSpy).toHaveBeenCalledWith('Previous getNewUsers is still running');
+    consoleSpy.mockRestore();
+  });
+});
