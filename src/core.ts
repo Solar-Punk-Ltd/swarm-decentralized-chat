@@ -478,7 +478,7 @@ export class SwarmChat {
         if (!this.gsocSubscribtion) throw "Only Gateway should run  this function in gateway mode!";
         selectedUser = ownAddress;                                // removeIdleUsers wouldn't run, if you wouldn't be the Gateway (when in gateway mode)
       } else {
-        selectedUser = this.utils.selectUsersFeedCommitWriter(activeUsers, this.emitStateEvent.bind(this));
+        selectedUser = await this.utils.selectUsersFeedCommitWriter(activeUsers, this.emitStateEvent.bind(this));
       }
 
       if (selectedUser === ownAddress) {

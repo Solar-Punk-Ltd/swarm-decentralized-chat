@@ -1,9 +1,9 @@
-import { ethers, Signature, Wallet } from "ethers";
+import { Wallet } from "ethers";
 import { SwarmChat } from "../src/core";
 import { EthAddress, MessageData, UserWithIndex } from "../src/types";
 import { BatchId } from "@ethersphere/bee-js";
-import { HOUR } from "../src/constants";
-import { initializeNewlyRegisteredWith3Users } from "./fixtures";
+import { userListWithNUsers } from "./fixtures";
+import { EVENTS } from "../src/constants";
 
 
 describe('startActivityAnalyses', () => {
@@ -41,7 +41,7 @@ describe('updateUserActivityAtRegistration', () => {
 
   it('should add the new users to the userActivityTable', async () => {
     let loggerInfoSpy = jest.spyOn(chat['logger'], 'info');
-    const newUsers = await initializeNewlyRegisteredWith3Users()
+    const newUsers = await userListWithNUsers(3)
     chat['newlyRegisteredUsers'] = newUsers;
 
     (chat as any).updateUserActivityAtRegistration();
@@ -63,7 +63,7 @@ describe('updateUserActivityAtRegistration', () => {
   });
 
   it('should update the timestamp when user re-registers', async () => {
-    const newUsers = await initializeNewlyRegisteredWith3Users()
+    const newUsers = await userListWithNUsers(3)
     chat['newlyRegisteredUsers'] = newUsers;
 
     (chat as any).updateUserActivityAtRegistration();
@@ -104,7 +104,7 @@ describe('updateUserActivityAtRegistration', () => {
 describe('updateUserActivityAtNewMessage', () => {
   it('should update the timestamp when new message is received', async () => {
     let chat = new SwarmChat();
-    let users = await initializeNewlyRegisteredWith3Users();
+    let users = await userListWithNUsers(3);
 
     for (let i = 0; i < users.length; i++) {
       chat['userActivityTable'][users[i].address] = {
@@ -128,7 +128,7 @@ describe('updateUserActivityAtNewMessage', () => {
 
   it('should handle multiple sequential updates for same user', async () => {
     let chat = new SwarmChat();
-    let users = await initializeNewlyRegisteredWith3Users();
+    let users = await userListWithNUsers(3);
     
     const timestamps = [Date.now(), Date.now() + 100, Date.now() + 200];
     
@@ -426,5 +426,56 @@ describe('removeDuplicateUsers', () => {
     expect(result).toEqual([
       { address: "0x123", username: "Alice", timestamp: 200, index: 2 }
     ]);
+  });
+});
+
+
+describe('selectUsersFeedCommitWriter', () => {
+  let chat: SwarmChat;
+  let mockEmitStateEvent: jest.Mock;
+
+  beforeEach(() => {
+    chat = new SwarmChat();
+    mockEmitStateEvent = jest.fn();
+  });
+
+  it('should select a user when minimum number of users is met', async () => {
+    const activeUsers = await userListWithNUsers(3);
+    
+    const selectedAddress = await (chat as any).utils.selectUsersFeedCommitWriter(activeUsers, mockEmitStateEvent);
+    
+    expect(activeUsers.some(user => user.address === selectedAddress)).toBe(true);
+    expect(mockEmitStateEvent).toHaveBeenCalledWith(EVENTS.FEED_COMMIT_HASH, expect.any(String));
+  });
+
+  it('should always select the same user for same input', async () => {
+    const activeUsers = await userListWithNUsers(5);
+    
+    const firstSelection = await (chat as any).utils.selectUsersFeedCommitWriter(activeUsers, mockEmitStateEvent);
+    const secondSelection = await (chat as any).utils.selectUsersFeedCommitWriter(activeUsers, mockEmitStateEvent);
+    
+    expect(firstSelection).toBe(secondSelection);
+  }, 25000);
+
+  it('should select from top 30% of users', async () => {
+    const activeUsers = await userListWithNUsers(10);
+    
+    const selectedAddress = await (chat as any).utils.selectUsersFeedCommitWriter(activeUsers, mockEmitStateEvent);
+    const expectedUsers = activeUsers.slice(0, 3);
+    
+    expect(expectedUsers.some(user => user.address === selectedAddress)).toBe(true);
+  }, 25000);
+
+  it('should select at least one user even with small user count', async () => {
+    const activeUsers = await userListWithNUsers(1);
+    
+    const selectedAddress = await (chat as any).utils.selectUsersFeedCommitWriter(activeUsers, mockEmitStateEvent);
+    
+    expect(selectedAddress).toBe(activeUsers[0].address);
+  }, 25000);
+
+  it('should handle empty user list', async () => {
+    await expect((chat as any).utils.selectUsersFeedCommitWriter([], mockEmitStateEvent))
+      .rejects.toThrow();
   });
 });
