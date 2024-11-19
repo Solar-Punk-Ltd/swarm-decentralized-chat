@@ -337,3 +337,94 @@ describe('validateUserObject', () => {
     expect(validateUserSpy).toHaveLastReturnedWith(true);
   });
 });
+
+
+describe('removeDuplicateUsers', () => {
+  let chat: SwarmChat;
+
+  beforeEach(() => {
+    chat = new SwarmChat();
+  });
+
+  it('should remove duplicate users and keep the latest one by timestamp', () => {
+    const users = [
+      { address: "0x123", username: "Alice", timestamp: 100, index: 1 },
+      { address: "0x123", username: "Alice", timestamp: 200, index: 2 },
+      { address: "0x456", username: "Bob", timestamp: 150, index: 1 }
+    ];
+
+    const result = (chat as any).utils.removeDuplicateUsers(users);
+
+    expect(result).toEqual([
+      { address: "0x123", username: "Alice", timestamp: 200, index: 2 },
+      { address: "0x456", username: "Bob", timestamp: 150, index: 1 }
+    ]);
+  });
+
+  it('should keep the one with the higher index if timestamps are the same', () => {
+    const users = [
+      { address: "0x123", username: "Alice", timestamp: 100, index: 1 },
+      { address: "0x123", username: "Alice", timestamp: 100, index: 2 },
+      { address: "0x456", username: "Bob", timestamp: 150, index: 1 }
+    ];
+
+    const result = (chat as any).utils.removeDuplicateUsers(users);
+
+    expect(result).toEqual([
+      { address: "0x123", username: "Alice", timestamp: 100, index: 2 },
+      { address: "0x456", username: "Bob", timestamp: 150, index: 1 }
+    ]);
+  });
+
+  it('should return the same array if there are no duplicate addresses', () => {
+    const users = [
+      { address: "0x123", username: "Alice", timestamp: 100, index: 1 },
+      { address: "0x456", username: "Bob", timestamp: 150, index: 1 },
+      { address: "0x789", username: "Carol", timestamp: 200, index: 1 }
+    ];
+
+    const result = (chat as any).utils.removeDuplicateUsers(users);
+
+    expect(result).toEqual(users);
+  });
+
+  it('should return an empty array if input is empty', () => {
+    const users: UserWithIndex[] = [];
+
+    const result = (chat as any).utils.removeDuplicateUsers(users);
+
+    expect(result).toEqual([]);
+  });
+
+  it('should handle multiple duplicates and keep the correct entries', () => {
+    const users = [
+      { address: "0x123", username: "Alice", timestamp: 100, index: 1 },
+      { address: "0x123", username: "Alice", timestamp: 200, index: 2 },
+      { address: "0x456", username: "Bob", timestamp: 150, index: 1 },
+      { address: "0x456", username: "Bob", timestamp: 150, index: 3 },
+      { address: "0x789", username: "Carol", timestamp: 300, index: 1 }
+    ];
+
+    const result = (chat as any).utils.removeDuplicateUsers(users);
+
+    expect(result).toEqual([
+      { address: "0x123", username: "Alice", timestamp: 200, index: 2 },
+      { address: "0x456", username: "Bob", timestamp: 150, index: 3 },
+      { address: "0x789", username: "Carol", timestamp: 300, index: 1 }
+    ]);
+  });
+
+  it('should keep only one user if all entries are duplicates', () => {
+    const users = [
+      { address: "0x123", username: "Alice", timestamp: 100, index: 1 },
+      { address: "0x123", username: "Alice", timestamp: 200, index: 2 },
+      { address: "0x123", username: "Alice", timestamp: 150, index: 3 }
+    ];
+
+    const result = (chat as any).utils.removeDuplicateUsers(users);
+
+    expect(result).toEqual([
+      { address: "0x123", username: "Alice", timestamp: 200, index: 2 }
+    ]);
+  });
+});
