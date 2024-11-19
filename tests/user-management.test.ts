@@ -1,6 +1,6 @@
 import { Signature, Wallet } from "ethers";
 import { SwarmChat } from "../src/core";
-import { EthAddress, MessageData } from "../src/types";
+import { EthAddress, MessageData, UserWithIndex } from "../src/types";
 import { BatchId } from "@ethersphere/bee-js";
 import { HOUR } from "../src/constants";
 import { initializeNewlyRegisteredWith3Users } from "./fixtures";
@@ -190,5 +190,37 @@ describe('tryUserFetch', () => {
     
     expect(consoleSpy).toHaveBeenCalledWith('Previous getNewUsers is still running');
     consoleSpy.mockRestore();
+  });
+});
+
+
+describe('setUsers', () => {
+  let chat: SwarmChat;
+
+  beforeEach(() => {
+    chat = new SwarmChat();
+  });
+
+  it('should set users and update loading flag when usersLoading is false', () => {
+    const newUsers = [{ address: '0x123', index: 1 }, { address: '0x456', index: 2 }];
+    chat['usersLoading'] = false;
+
+    (chat as any).setUsers(newUsers);
+
+    expect(chat['users']).toEqual(newUsers);
+    expect(chat['usersLoading']).toBe(false);
+  });
+
+  it('should avoid hot loop when usersLoading is true initially', () => {
+    const newUsers = [{ address: '0x123', index: 1 }];
+    chat['usersLoading'] = true;
+
+    const setUsersSpy = jest.spyOn(chat as any, 'setUsers');
+
+    (chat as any).setUsers(newUsers);
+
+    expect(setUsersSpy).toHaveBeenCalledTimes(1);
+    expect(chat['users']).not.toEqual(newUsers);
+    expect(chat['usersLoading']).toBe(true);
   });
 });
