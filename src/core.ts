@@ -147,7 +147,7 @@ export class SwarmChat {
   }
 
   /** Creates the Users feed, which is necesarry for user registration, and to handle idle users. This will create a new chat room. */
-  public async initChatRoom(topic: string, stamp: BatchId/*, gateway?: string*/) {
+  public async initChatRoom(topic: string, stamp: BatchId) {
     try {
       // Create Users feed
       const { consensusHash, graffitiSigner } = this.utils.generateGraffitiFeedMetadata(topic);
@@ -164,10 +164,10 @@ export class SwarmChat {
         );
         if (!resourceId) throw "Could not create resource ID!";
         else this.gsocResourceId = resourceId;
-        console.info("resource ID: ", resourceId)
+        this.logger.info(`resource ID: ${resourceId}`);
   
         // Subscribe to the GSOC feed  
-        this.gsocSubscribtion = await this.utils.subscribeToGsoc(
+        this.gsocSubscribtion = this.utils.subscribeToGsoc(
           this.bee.url,
           stamp,
           topic,
