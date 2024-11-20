@@ -327,9 +327,9 @@ export class SwarmChat {
       if (this.gateway) {
         if (this.gsocSubscribtion) {                                                   // Only the Gateway is doing Activity Analysis (removeIdleUsers is called by this function)
           this.startActivityAnalyzes(topic, address, stamp as BatchId);
-          console.info("You are the Gateway")
+          this.logger.info("You are the Gateway");
         } else {
-          console.info("You are not the Gateway")
+          this.logger.info("You are not the Gateway");
         }
       } else {
         this.startActivityAnalyzes(topic, address, stamp as BatchId);                  // Every User is doing Activity Analysis (when not in gateway mode), and one of them is selected to write the UsersFeed

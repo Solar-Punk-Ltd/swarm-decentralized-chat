@@ -1,9 +1,11 @@
 import { SwarmChat } from '../src/core';
 import { EVENTS, MINUTE, SECOND } from '../src/constants';
-import { BatchId, Bee } from '@ethersphere/bee-js';
+import { BatchId, Bee, FeedWriter, Reference } from '@ethersphere/bee-js';
 import { EventEmitter } from '../src/eventEmitter';
-import { UsersFeedCommit } from '../src/types';
+import { Bytes, EthAddress, UsersFeedCommit } from '../src/types';
 import { userListWithNUsers } from './fixtures';
+import { ethers, Wallet } from 'ethers';
+import { SingleOwnerChunk } from '@anythread/gsoc/dist/soc';
 
 
 describe('SwarmChat initialization and configuration (constructor)', () => {
@@ -374,5 +376,169 @@ describe('initUsers', () => {
 
     expect(mockUtils.removeDuplicateUsers).toHaveBeenCalled();
     expect(setUsersSpy).toHaveBeenCalledWith([mockUsers[0]]);
+  });
+});
+
+
+describe('registerUser', () => {
+  let chat: SwarmChat;
+  let wallet: Wallet;
+
+  beforeEach(() => {
+    chat = new SwarmChat();
+    wallet = Wallet.createRandom();
+    
+    // Mock necessary utility methods and dependencies
+    jest.spyOn(chat['utils'], 'validateUserObject').mockReturnValue(true);
+    jest.spyOn(chat['utils'], 'uploadObjectToBee').mockResolvedValue({ reference: 'userRef' as Reference });
+    jest.spyOn(chat['utils'], 'graffitiFeedWriterFromTopic').mockReturnValue({
+      upload: jest.fn().mockResolvedValue(null)
+    } as unknown as FeedWriter);
+    jest.spyOn(chat['utils'], 'sendMessageToGsoc').mockResolvedValue("singleOwnerChunk" as unknown as SingleOwnerChunk );
+    jest.spyOn(chat['utils'], 'isNotFoundError').mockReturnValue(false);
+    
+    // Mock emitStateEvent to prevent actual event emission
+    jest.spyOn(chat as any, 'emitStateEvent');
+
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+    jest.resetAllMocks();
+  });
+
+  it('should validate Ethereum address', async () => {
+    const handleErrorSpy = jest. spyOn(chat as any, 'handleError');
+    const wallet = Wallet.createRandom();
+    const wrongAddress = "0x71Cbad6EC7ab88b0badefB751B7401B5fbad976F";
+    const stamp = "example-stamp";
+
+    await chat.registerUser('exampleTopic', {
+      participant: wrongAddress as unknown as EthAddress,
+      nickName: "Alice",
+      key: wallet.privateKey,
+      stamp: stamp
+    });
+
+    expect(handleErrorSpy).toHaveBeenCalledWith({
+      error: Error("The provided address does not match the address derived from the private key"),
+      context: `registerUser`,
+      throw: false
+    });
+  });
+
+  it('should start activity analyses in gateway mode, only at the gateway', async () => {
+    chat['gateway'] = "gatewayOverlayAddress";
+    chat['gsocSubscribtion'] = {
+      close: jest.fn(),
+      gsocAddress: "address" as unknown as Bytes<32>
+    };
+    
+    const startActivityAnalyzesSpy = jest.spyOn(chat as any, 'startActivityAnalyzes');
+
+    await chat.registerUser("example-topic", {
+      participant: wallet.address as EthAddress,
+      nickName: "Bob",
+      key: wallet.privateKey,
+      stamp: "example-stamp"
+    });
+
+    expect(startActivityAnalyzesSpy).toHaveBeenCalledWith("example-topic", wallet.address, "example-stamp");
+  });
+
+  it('should start activity analyses if not in gateway mode', async () => {    
+    const startActivityAnalyzesSpy = jest.spyOn(chat as any, 'startActivityAnalyzes');
+    
+    await chat.registerUser("example-topic", {
+      participant: wallet.address as EthAddress,
+      nickName: "Charlie",
+      key: wallet.privateKey,
+      stamp: "example-stamp"
+    });
+
+    expect(startActivityAnalyzesSpy).toHaveBeenCalledWith("example-topic", wallet.address, "example-stamp");
+  });
+
+  it('should return if user is already registered', async () => {
+    // Simulate an existing user
+    (chat as any).users = [{
+      address: wallet.address,
+      username: "ExistingUser",
+      timestamp: Date.now(),
+      signature: "existing-signature"
+    }];
+
+    const loggerInfoSpy = jest.spyOn(chat['logger'], 'info');
+    
+    await chat.registerUser("example-topic", {
+      participant: wallet.address as EthAddress,
+      nickName: "DuplicateUser",
+      key: wallet.privateKey,
+      stamp: "example-stamp"
+    });
+
+    expect(loggerInfoSpy).toHaveBeenCalledWith('User already registered');
+  });
+
+  it('should call sendMessageToGsoc with correct parameters, when in gateway mode', async () => {
+    chat['gateway'] = "gatewayOverlayAddress";
+    chat['gsocResourceId'] = "abff00000000";
+    
+    const sendMessageToGsocSpy = chat['utils'].sendMessageToGsoc as jest.Mock;
+    
+    await chat.registerUser("example-topic", {
+      participant: wallet.address as EthAddress,
+      nickName: "GatewayUser",
+      key: wallet.privateKey,
+      stamp: "example-stamp"
+    });
+
+    expect(sendMessageToGsocSpy).toHaveBeenCalledWith(
+      chat['bee'].url,
+      "example-stamp",
+      "example-topic",
+      "abff00000000",
+      expect.any(String)
+    );
+  });
+
+  it('should call uploadObjectToBee with correct parameters, when not in gateway mode', async () => {
+    const uploadObjectToBeeSpy = chat['utils'].uploadObjectToBee as jest.Mock;
+    
+    await chat.registerUser("example-topic", {
+      participant: wallet.address as EthAddress,
+      nickName: "NonGatewayUser",
+      key: wallet.privateKey,
+      stamp: "example-stamp"
+    });
+
+    expect(uploadObjectToBeeSpy).toHaveBeenCalledWith(
+      chat['bee'],
+      {
+        users: [expect.objectContaining({
+          address: wallet.address,
+          username: "NonGatewayUser"
+        })],
+        overwrite: false
+      },
+      "example-stamp"
+    );
+  });
+
+  it('should call feedWriter.upload with correct parameters, when not in gateway mode', async () => {
+    const feedWriterMock = chat['utils'].graffitiFeedWriterFromTopic(chat['bee'], "test-topic");
+    const uploadSpy = feedWriterMock.upload as jest.Mock;
+    
+    await chat.registerUser("test-topic", {
+      participant: wallet.address as EthAddress,
+      nickName: "FeedWriterTest",
+      key: wallet.privateKey,
+      stamp: "example-stamp"
+    });
+
+    expect(uploadSpy).toHaveBeenCalledWith(
+      "example-stamp", 
+      'userRef'
+    );
   });
 });
