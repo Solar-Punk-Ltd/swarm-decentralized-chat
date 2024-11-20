@@ -242,7 +242,7 @@ export class SwarmChat {
           const usersBatch: UserWithIndex[] = validUsers as unknown as UserWithIndex[];
           aggregatedList = [...usersBatch];
 
-          const thresholdTime = Date.now() - 60 * 1000;              // Threshold is 1 minute
+          const thresholdTime = Date.now() - 1 * MINUTE;             // Threshold is 1 minute
           let lastTimestamp = Date.now();
 
           if (this.gateway) break;                                   // This feed is not used for registration in gateway mode, so we are done
