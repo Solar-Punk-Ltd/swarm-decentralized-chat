@@ -1,6 +1,6 @@
 import { Wallet } from "ethers";
 import { SwarmChat } from "../src/core";
-import { EthAddress, MessageData, User, UserActivity, UserWithIndex } from "../src/types";
+import { Bytes, EthAddress, MessageData, User, UserActivity, UserWithIndex } from "../src/types";
 import { BatchId } from "@ethersphere/bee-js";
 import { createMockActivityTable, userListWithNUsers } from "./fixtures";
 import { EVENTS, MINUTE } from "../src/constants";
@@ -645,5 +645,121 @@ describe('subscribeToGsoc', () => {
     const result = (chat as any).utils.subscribeToGsoc(url, stamp, topic, resourceId, callback);
 
     expect(result).toEqual({ unsubscribe: expect.any(Function) });
+  });
+});
+
+
+describe('removeIdleUsers', () => {
+  let chat: SwarmChat;
+
+  beforeEach(() => {
+    chat = new SwarmChat();
+    jest.restoreAllMocks();
+  });
+
+  afterEach(() => {
+  });
+
+  it('should return for new users', async () => {
+    const getActiveUsersSpy = jest.spyOn((chat as any).utils, 'getActiveUsers');
+    const writeUsersFeedCommitSpy = jest.spyOn(chat as any, 'writeUsersFeedCommit');
+    const setUsersSpy = jest.spyOn(chat as any, 'setUsers');
+
+    await chat['removeIdleUsers']("example-topic", "0x123" as EthAddress, "000" as BatchId);
+
+    expect(getActiveUsersSpy).not.toHaveBeenCalled();
+    expect(writeUsersFeedCommitSpy).not.toHaveBeenCalled();
+    expect(setUsersSpy).not.toHaveBeenCalled();
+  });
+
+  it('should log warning message if removeIdleIsRunning is true', async () => {
+    chat.changeLogLevel('warn');
+    const loggerWarnSpy = jest.spyOn((chat as any).logger, 'warn');
+    const getActiveUsersSpy = jest.spyOn((chat as any).utils, 'getActiveUsers');
+    const writeUsersFeedCommitSpy = jest.spyOn(chat as any, 'writeUsersFeedCommit');
+    const setUsersSpy = jest.spyOn(chat as any, 'setUsers');
+    
+    chat['removeIdleIsRunning'] = true;
+    chat['reqCount'] = 33;
+    await chat['removeIdleUsers']("example-topic", "0x123" as EthAddress, "000" as BatchId);
+
+    expect(loggerWarnSpy).toHaveBeenCalledWith("Previous removeIdleUsers is still running");
+    expect(getActiveUsersSpy).not.toHaveBeenCalled();
+    expect(writeUsersFeedCommitSpy).not.toHaveBeenCalled();
+    expect(setUsersSpy).not.toHaveBeenCalled();
+  });
+
+  it('should call getActiveUsers if reqCount is bigger than 32 and removeIdleIsRunning is false', async () => {
+    const getActiveUsersSpy = jest.spyOn((chat as any).utils, 'getActiveUsers');
+    chat['reqCount'] = 33;
+
+    await chat['removeIdleUsers']("example-topic", "0x123" as EthAddress, "000" as BatchId);
+
+    expect(getActiveUsersSpy).toHaveBeenCalled();
+  });
+
+  it('should return, if there are no active users and not in gateway mode (after writing UsersFeedCommit)', async () => {
+    const getActiveUsersSpy = jest.spyOn((chat as any).utils, 'getActiveUsers');
+    const writeUsersFeedCommitSpy = jest.spyOn(chat as any, 'writeUsersFeedCommit');
+    const selectUsersFeedCommitWriterSpy = jest.spyOn((chat as any).utils, 'selectUsersFeedCommitWriter');
+    const setUsersSpy = jest.spyOn(chat as any, 'setUsers');
+    getActiveUsersSpy.mockReturnValue([]);
+
+    chat['reqCount'] = 33;
+    await chat['removeIdleUsers']("example-topic", "0x123" as EthAddress, "000" as BatchId);
+
+    expect(getActiveUsersSpy).toHaveBeenCalled();
+    expect(writeUsersFeedCommitSpy).toHaveBeenCalled();
+    expect(selectUsersFeedCommitWriterSpy).not.toHaveBeenCalled();
+    expect(setUsersSpy).not.toHaveBeenCalled();
+  });
+
+  it('should call selectUsersFeedCommitWriter if not in Gateway mode and there are active users', async () => {
+    const getActiveUsersSpy = jest.spyOn((chat as any).utils, 'getActiveUsers');
+    const writeUsersFeedCommitSpy = jest.spyOn(chat as any, 'writeUsersFeedCommit');
+    const selectUsersFeedCommitWriterSpy = jest.spyOn((chat as any).utils, 'selectUsersFeedCommitWriter');
+    const setUsersSpy = jest.spyOn(chat as any, 'setUsers');
+    getActiveUsersSpy.mockReturnValue([{ address: '0x123', index: 1 }]);
+    
+    chat['reqCount'] = 33;
+    await chat['removeIdleUsers']("example-topic", "0x123" as EthAddress, "000" as BatchId);
+
+    expect(getActiveUsersSpy).toHaveBeenCalled();
+    expect(writeUsersFeedCommitSpy).toHaveBeenCalled();
+    expect(selectUsersFeedCommitWriterSpy).toHaveBeenCalled();
+    expect(setUsersSpy).toHaveBeenCalled();
+  });
+
+  it('should throw error when in Gateway mode and not the gateway is running removeIdleUsers', async () => {
+    const handleErrorSpy = jest.spyOn(chat as any, 'handleError');
+    chat['gateway'] = "gatewayOverlayAddress";
+    chat['reqCount'] = 33;
+
+    await chat['removeIdleUsers']("example-topic", "0x123" as EthAddress, "000" as BatchId);
+
+    expect(handleErrorSpy).toHaveBeenCalledWith({
+      error: "Only Gateway should run  this function in gateway mode!",
+      context: 'removeIdleUsers',
+      throw: false
+    });
+  });
+
+  it('should call writeUsersFeedCommit and setUsers when in Gateway mode and gateway is running removeIdleUsers', async () => {
+    const getActiveUsersSpy = jest.spyOn((chat as any).utils, 'getActiveUsers');
+    const writeUsersFeedCommitSpy = jest.spyOn(chat as any, 'writeUsersFeedCommit');
+    const setUsersSpy = jest.spyOn(chat as any, 'setUsers');
+    getActiveUsersSpy.mockReturnValue([{ address: '0x123', index: 1 }]);
+    chat['gateway'] = "gatewayOverlayAddress";
+    chat['reqCount'] = 33;
+    chat['gsocSubscribtion'] = {
+      close: jest.fn(),
+      gsocAddress: "address" as unknown as Bytes<32>
+    };
+
+    await chat['removeIdleUsers']("example-topic", "0x123" as EthAddress, "000" as BatchId);
+
+    expect(getActiveUsersSpy).toHaveReturnedWith([{ address: '0x123', index: 1 }]);
+    expect(writeUsersFeedCommitSpy).toHaveBeenCalled();
+    expect(setUsersSpy).toHaveBeenCalled();
   });
 });
