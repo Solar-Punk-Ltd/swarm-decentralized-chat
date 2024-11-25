@@ -16,17 +16,17 @@ export class SwarmChatUtils {
     this.logger = logger;
   }
 
-  // Generate an ID for the feed, that will be connected to the stream, as Users list
+  /** Generate an ID for the feed, that will be connected to the stream, as Users list */
   generateUsersFeedId(topic: string) {
     return `${topic}_EthercastChat_Users`;
   }
 
-  // Generate an ID for the feed, that is owned by a single user, who is writing messages to the chat
+  /** Generate an ID for the feed, that is owned by a single user, who is writing messages to the chat */
   generateUserOwnedFeedId(topic: string, userAddress: EthAddress) {
     return `${topic}_EthercastChat_${userAddress}`;
   }
 
-  // Validates a User object, including incorrect type, and signature
+  /** Validates a User object, including incorrect type, and signature */
   validateUserObject(user: any): boolean {
     try {
       if (typeof user.username !== 'string') throw 'username should be a string';
@@ -65,12 +65,12 @@ export class SwarmChatUtils {
 
 
 
-  // Returns timesstamp ordered messages
+  /** Returns timesstamp ordered messages */
   orderMessages(messages: MessageData[]) {
     return messages.sort((a, b) => a.timestamp - b.timestamp);
   }
 
-  // Remove duplicated elements from users object
+  /** Remove duplicated elements from users object */
   removeDuplicateUsers(users: UserWithIndex[]): UserWithIndex[] {
     const userMap: Record<string, UserWithIndex> = {};
 
@@ -91,7 +91,7 @@ export class SwarmChatUtils {
     return Object.values(userMap);
   }
 
-  // getConsensualPrivateKey will generate a private key, that is used for the Graffiti-feed (which is a public feed, for user registration)
+  /** getConsensualPrivateKey will generate a private key, that is used for the Graffiti-feed (which is a public feed, for user registration) */
   getConsensualPrivateKey(resource: Sha3Message) {
     if (Utils.isHexString(resource) && resource.length === 64) {
       return Utils.hexToBytes(resource);
@@ -100,18 +100,18 @@ export class SwarmChatUtils {
     return Utils.keccak256Hash(resource);
   }
 
-  // getGraffitiWallet generates a Graffiti wallet, from provided private key (see getConsensualPrivateKey)
+  /** getGraffitiWallet generates a Graffiti wallet, from provided private key (see getConsensualPrivateKey) */
   getGraffitiWallet(consensualPrivateKey: BytesLike) {
     const privateKeyBuffer = utils.hexlify(consensualPrivateKey);
     return new Wallet(privateKeyBuffer);
   }
 
-  // Serializes a js object, into Uint8Array
+  /** Serializes a js object, into Uint8Array */
   serializeGraffitiRecord(record: Record<any, any>) {
     return new TextEncoder().encode(JSON.stringify(record));
   }
 
-  // Creates feed-index-format index, from a number
+  /** Creates feed-index-format index, from a number */
   numberToFeedIndex(index: number) {
     const bytes = new Uint8Array(8);
     const dv = new DataView(bytes.buffer);
@@ -120,28 +120,33 @@ export class SwarmChatUtils {
     return Utils.bytesToHex(bytes);
   }
 
-  // General sleep function, usage: await sleep(ms)
+  /** General sleep function, usage: await sleep(ms) */
   sleep(delay: number) {
     return new Promise((resolve) => {
       setTimeout(resolve, delay);
     });
   }
 
-  // Increment hex string, default value is 1
+  /** Increment hex string, default value is 1 */
   incrementHexString(hexString: string, i = 1n) {
     const num = BigInt('0x' + hexString);
     return (num + i).toString(HEX_RADIX).padStart(HEX_RADIX, '0');
   }
 
+  /** Converts hex string to number */
   hexStringToNumber(hexString: string) {
     return Number('0x' + hexString);
   }
 
+  /** 
+   * fetchUsersFeedAtIndex will either read Users feed at specific index, or if index is not provided, it will find out the last index.
+   * It will give back the next index, alongside the UsersFeedCommit
+   */
   async fetchUsersFeedAtIndex(bee: Bee, feedReader: FeedReader, i: number | undefined): Promise<UsersFeedResponse|null> {
     try {
       if (i !== undefined && i < 0) throw "Index out of range!";
 
-      const feedEntry = await feedReader.download({ index: i});
+      const feedEntry = await feedReader.download({ index: i });
       const nextIndex = parseInt(feedEntry.feedIndexNext, HEX_RADIX);
       const data = await bee.downloadData(feedEntry.reference);
       const objectFromFeed = data.json() as unknown as UsersFeedCommit;
@@ -161,7 +166,7 @@ export class SwarmChatUtils {
     }
   }
 
-  // retryAwaitableAsync will retry a promise if fails, default retry number is 3, default delay between attempts is 250 ms
+  /** retryAwaitableAsync will retry a promise if fails, default retry number is 3, default delay between attempts is 250 ms */
   async retryAwaitableAsync<T>(
     fn: () => Promise<T>,
     retries: number = 3,
@@ -190,7 +195,7 @@ export class SwarmChatUtils {
     });
   }
 
-  // Uploads a js object to Swarm, a valid stamp needs to be provided
+  /** Uploads a js object to Swarm, a valid stamp needs to be provided */
   async uploadObjectToBee(
     bee: Bee, 
     jsObject: object, 
@@ -209,19 +214,19 @@ export class SwarmChatUtils {
     }
   }
 
-  // Creates a Graffiti feed writer from provided topic, Bee request options can be provided, e.g. timeout
+  /** Creates a Graffiti feed writer from provided topic, Bee request options can be provided, e.g. timeout */
   graffitiFeedWriterFromTopic(bee: Bee, topic: string, options?: BeeRequestOptions) {
     const { consensusHash, graffitiSigner } = this.generateGraffitiFeedMetadata(topic);
     return bee.makeFeedWriter('sequence', consensusHash, graffitiSigner, options);
   }
 
-  // Creates a Graffiti feed reader from provided topic, Bee request options can be provided, e.g. timeout
+  /** Creates a Graffiti feed reader from provided topic, Bee request options can be provided, e.g. timeout */
   graffitiFeedReaderFromTopic(bee: Bee, topic: string, options?: BeeRequestOptions) {
     const { consensusHash, graffitiSigner } = this.generateGraffitiFeedMetadata(topic);
     return bee.makeFeedReader('sequence', consensusHash, graffitiSigner.address, options);
   }
 
-  // generateGraffitiFeedMetadata will give back a consensus hash, and a Signer, from provided topic
+  /** generateGraffitiFeedMetadata will give back a consensus hash, and a Signer, from provided topic */
   generateGraffitiFeedMetadata(topic: string) {
     const roomId = this.generateUsersFeedId(topic);
     const privateKey = this.getConsensualPrivateKey(roomId);
@@ -242,7 +247,7 @@ export class SwarmChatUtils {
     };
   }
 
-  // getLatestFeedIndex will give back latestIndex and nextIndex, if download succeeds, if not, latestIndex will be -1, and nextIndex is 0
+  /** getLatestFeedIndex will give back latestIndex and nextIndex, if download succeeds, if not, latestIndex will be -1, and nextIndex is 0 */
   async getLatestFeedIndex(bee: Bee, topic: string, address: EthAddress) {
     try {
       const feedReader = bee.makeFeedReader('sequence', topic, address);
@@ -261,52 +266,62 @@ export class SwarmChatUtils {
 
   // TODO: why bee-js do this?
   // status is undefined in the error object
-  // Determines if the error is about 'Not Found'
+  /** Determines if the error is about 'Not Found' */
   isNotFoundError(error: any) {
     return error.stack.includes('404') || error.message.includes('Not Found') || error.message.includes('404');
   }
 
-  // selectUsersFeedCommitWriter will select a user who will write a UsersFeedCommit object to the feed
-  selectUsersFeedCommitWriter(activeUsers: UserWithIndex[], emitStateEvent: (event: string, value: any) => void): EthAddress {
+  /** selectUsersFeedCommitWriter will select a user who will write a UsersFeedCommit object to the feed */
+  async selectUsersFeedCommitWriter(activeUsers: UserWithIndex[], emitStateEvent: (event: string, value: any) => void): Promise<EthAddress> {
     const minUsersToSelect = 1;
     const numUsersToselect = Math.max(Math.ceil(activeUsers.length * 0.3), minUsersToSelect);     // Select top 30% of activeUsers, but minimum 1
     const mostActiveUsers = activeUsers.slice(0, numUsersToselect);                               // Top 30% but minimum 3 (minUsersToSelect)
 
     this.logger.debug(`Most active users:  ${mostActiveUsers}`);
     const sortedMostActiveAddresses = mostActiveUsers.map((user) => user.address).sort();
-    //const seedString = sortedMostActiveAddresses.join(',');                                       // All running instances should have the same string at this time
-    //const hash = crypto.createHash('sha256').update(seedString).digest('hex');                    // Hash should be same in all computers that are in this chat
-    //emitStateEvent(EVENTS.FEED_COMMIT_HASH, hash);
-    //const randomIndex = parseInt(hash, 16) % mostActiveUsers.length;                              // They should have the same number, thus, selecting the same user
-    const randomIndex = Math.floor(Math.random() * sortedMostActiveAddresses.length);
+    const seedString = sortedMostActiveAddresses.join(',');                                       // All running instances should have the same string at this time
+    const hash = await this.generateHash(seedString);                                             // Hash should be same in all computers that are in this chat
+    emitStateEvent(EVENTS.FEED_COMMIT_HASH, hash);
+    const randomIndex = parseInt(hash, 16) % mostActiveUsers.length;                              // They should have the same number, thus, selecting the same user
     
     return mostActiveUsers[randomIndex].address;
   }
 
-  // Gives back the currently active users, based on idle time and user count limit calculation
+  /** Generate SHA256 hash, will output a string */
+  async generateHash(seedString: string): Promise<string> {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(seedString);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    return hashHex;
+  }
+
+  /** Gives back the currently active users, based on idle time and user count limit calculation */
   getActiveUsers(users: UserWithIndex[], userActivityTable: UserActivity, idleTime: number, limit: number): UserWithIndex[] {
     const idleMs: IdleMs = {};
     const now = Date.now();
 
-    for (const rawKey in userActivityTable) {
-      const key = rawKey as unknown as EthAddress;
-      if (!userActivityTable[key]) {
-        userActivityTable[key] = {
-          timestamp: now,       // this used to be user.timestamp, but it is possibly causing a bug
-          readFails: 0
-        }
+    // Ensure all users have an entry in userActivityTable
+    users.forEach(user => {
+      if (!userActivityTable[user.address]) {
+        userActivityTable[user.address] = { timestamp: now, readFails: 0 };
       }
-      idleMs[key] = now - userActivityTable[key].timestamp;
-    }
-
-    this.logger.debug(`Users inside removeIdle:  ${users}`)
-
-    const activeUsers = users.filter((user) => {
-      return idleMs[user.address] < idleTime;
     });
 
-    // Sort activeUsers by their last activity timestamp (most recent first)
-    const sortedActiveUsers = activeUsers.sort((a, b) => userActivityTable[b.address].timestamp - userActivityTable[a.address].timestamp);
+    // Calculate idle time for each user
+    for (const user of users) {
+      idleMs[user.address] = now - userActivityTable[user.address].timestamp;
+    }
+    
+    this.logger.debug(`Users inside removeIdle: ${users}`);
+    const activeUsers = users.filter((user) => {
+      return idleMs[user.address] <= idleTime;
+    });
+
+    const sortedActiveUsers = activeUsers.sort((a, b) => 
+      userActivityTable[b.address].timestamp - userActivityTable[a.address].timestamp
+    );
 
     return sortedActiveUsers.slice(0, limit);
   }
@@ -373,7 +388,7 @@ export class SwarmChatUtils {
         },
       });
 
-      const mineResult = informationSignal.mineResourceId(this.hexToBytes(gateway), 24);
+      const mineResult = informationSignal.mineResourceId(this.hexToBytes(gateway), 11);
 
       return this.bytesToHex(mineResult.resourceId);
 
@@ -387,7 +402,8 @@ export class SwarmChatUtils {
     }
   }
 
-  async subscribeToGsoc(url: string, stamp: BatchId, topic: string, resourceId: HexString<number>, callback: (topic: string, stamp: BatchId, gsocMessage: string) => void) {
+  /** The gateway (aggregator) subscribes to a gsoc feed, to receive registration messages */
+  subscribeToGsoc(url: string, stamp: BatchId, topic: string, resourceId: HexString<number>, callback: (topic: string, stamp: BatchId, gsocMessage: string) => void) {
     try {
       if (!resourceId) throw "ResourceID was not provided!";
 
@@ -405,8 +421,8 @@ export class SwarmChatUtils {
 
       const gsocSub = informationSignal.subscribe({
           onMessage: (msg: string) => {
-            console.log('Registration object received, calling userRegisteredThroughGsoc');
-            console.log("gsoc message: ", msg)
+            this.logger.info('Registration object received, calling userRegisteredThroughGsoc');
+            this.logger.debug("gsoc message: ", msg)
             callback(topic, stamp, msg);
           }, 
           onError: console.log
@@ -417,6 +433,7 @@ export class SwarmChatUtils {
       return gsocSub;
 
     } catch (error) {
+      console.error(error)
       this.handleError({
         error: error as unknown as Error,
         context: `subscribeToGSOC`,
@@ -426,6 +443,7 @@ export class SwarmChatUtils {
     }
   }
 
+  /** Used for registration, will send a message to a gsoc node. Only in gateway mode. */
   async sendMessageToGsoc(url: string, stamp: BatchId, topic: string, resourceId: HexString<number>, message: string): Promise<SingleOwnerChunk | undefined> {
     try {
       if (!resourceId) throw "ResourceID was not provided!";
@@ -450,9 +468,28 @@ export class SwarmChatUtils {
       });
     }
   }
+
+  /** Validates if properties of MessageData are of correct type */
+  validateMessageData(data: any): asserts data is MessageData {
+    if (typeof data !== 'object' || data === null) {
+      throw new Error('Message data must be an object.');
+    }
+    if (typeof data.message !== 'string') {
+      throw new Error('Message field must be a string.');
+    }
+    if (typeof data.username !== 'string') {
+      throw new Error('Username field must be a string.');
+    }
+    if (typeof data.address !== 'string' || !/^0x[a-fA-F0-9]{40}$/.test(data.address)) {
+      throw new Error('Address must be a valid Ethereum address.');
+    }
+    if (typeof data.timestamp !== 'number' || isNaN(data.timestamp)) {
+      throw new Error('Timestamp must be a valid number.');
+    }
+  }
 }
 
-// Calculates and stores average, used for request time averaging
+/** Calculates and stores average, used for request time averaging */
 export class RunningAverage {
   private maxSize: number;
   private values: number[];

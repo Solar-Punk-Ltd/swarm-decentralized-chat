@@ -28,7 +28,7 @@ import { HexString } from '@anythread/gsoc/dist/types';
  * Swarm Decentralized Chat
  */
 export class SwarmChat {
-  /** Variables that will be constant for this SwarmChat instance */
+  /// Variables that will be constant for this SwarmChat instance
   private USERS_FEED_TIMEOUT: number;                                       // Timeout when writing UsersFeedCommit
   private REMOVE_INACTIVE_USERS_INTERVAL = 1 * MINUTE;
   private IDLE_TIME = 1 * MINUTE;                                           // User will be removed from readMessage loop after this time, until rejoin
@@ -46,7 +46,7 @@ export class SwarmChat {
   private MESSAGE_FETCH_MAX = 8 * SECOND;                                   // Highest message fetch frequency (ms)
   private F_STEP = 100;                                                     // Message fetch step (ms)
 
-  /** Actual variables, like Bee instance, messages, analytics, user list, etc */
+  /// Actual variables, like Bee instance, messages, analytics, user list, etc
   private bee = new Bee('http://localhost:1633');
   private emitter = new EventEmitter();
   private messages: MessageData[] = [];
@@ -81,16 +81,16 @@ export class SwarmChat {
     loadingRegistration: false,
   };
 
-  // Constructor, static variables will get value here
+  /** Constructor, static variables will get value here  */
   constructor(settings: ChatSettings = {}, beeInstance?: Bee, eventEmitter?: EventEmitter) {
-    this.bee = this.bee = beeInstance || new Bee(settings.url || 'http://localhost:1633');
+    this.bee = beeInstance || new Bee(settings.url || 'http://localhost:1633');
     this.gateway = settings.gateway || "";                                                  // If exists, SwarmChat will run in gateway mode
     this.gsocResourceId = settings.gsocResourceId || "";                                    // When in gateway mode, normal nodes need to provide this
     this.emitter = eventEmitter || new EventEmitter();
     
     this.USERS_FEED_TIMEOUT = settings.usersFeedTimeout || 8 * SECOND;                      // Can adjust UsersFeedCommit write timeout, but higher values might cause SocketHangUp in Bee
     this.REMOVE_INACTIVE_USERS_INTERVAL = settings.removeInactiveInterval || 1 * MINUTE;    // How often run removeIdleUsers
-    this.IDLE_TIME = settings.idleTime || 1 * MINUTE;                                       // Can adjust idle time, after that, usser is inactive (messages not polled)
+    this.IDLE_TIME = settings.idleTime || 10 * MINUTE;                                      // Can adjust idle time, after that, usser is inactive (messages not polled)
     this.USER_LIMIT = settings.userLimit || 20;                                             // Overwrites IDLE_TIME, maximum active users
 
     this.USER_UPDATE_INTERVAL = settings.userUpdateInterval || 8 * SECOND;                  // Burnt-in value of user update interval (will not change)
@@ -104,7 +104,9 @@ export class SwarmChat {
     this.MESSAGE_FETCH_MIN = settings.messageFetchMin || 300;                               // Lowest possible value for message fetch interval
     this.MESSAGE_FETCH_MAX = settings.messageFetchMax || 8 * SECOND;                        // Highest possible value for message fetch interval
     this.F_STEP = settings.fStep || 100;                                                    // When interval is changed, it is changed by this value
+    this.mInterval = settings.messageCheckInterval || this.MESSAGE_FETCH_MIN * 3;           // 3x times min, or user-specified
     
+    settings.prettier = true;
     const prettier = settings.prettier ? pinoPretty({                                       // Colorizing capability for logger
       colorize: true,
       translateTime: 'SYS:standard',
@@ -123,7 +125,7 @@ export class SwarmChat {
     this.messagesQueue = new AsyncQueue({ waitable: true, max: 4 }, this.handleError.bind(this), this.logger);
     this.reqTimeAvg = new RunningAverage(1000, this.logger);
 
-    console.info(`SwarmChat created, version: v0.1.8 or above`);
+    this.logger.info(`SwarmChat created, version: v0.1.16 or above`);
   }
 
   /** With getChatActions, it's possible to listen to events on front end or anywhere outside the library. 
@@ -145,7 +147,7 @@ export class SwarmChat {
   }
 
   /** Creates the Users feed, which is necesarry for user registration, and to handle idle users. This will create a new chat room. */
-  public async initChatRoom(topic: string, stamp: BatchId/*, gateway?: string*/) {
+  public async initChatRoom(topic: string, stamp: BatchId) {
     try {
       // Create Users feed
       const { consensusHash, graffitiSigner } = this.utils.generateGraffitiFeedMetadata(topic);
@@ -162,10 +164,10 @@ export class SwarmChat {
         );
         if (!resourceId) throw "Could not create resource ID!";
         else this.gsocResourceId = resourceId;
-        console.info("resource ID: ", resourceId)
+        this.logger.info(`resource ID: ${resourceId}`);
   
         // Subscribe to the GSOC feed  
-        this.gsocSubscribtion = await this.utils.subscribeToGsoc(
+        this.gsocSubscribtion = this.utils.subscribeToGsoc(
           this.bee.url,
           stamp,
           topic,
@@ -205,7 +207,7 @@ export class SwarmChat {
     if (this.messageFetchClock) {
       clearInterval(this.messageFetchClock);
     }
-    this.messageFetchClock = setInterval(this.readMessagesForAll(topic), this.mInterval);
+    this.messageFetchClock = setInterval(() => this.readMessagesForAll(topic), this.mInterval);
   }
 
   /** The SwarmChat instance will stop polling for new messages on users' own feeds. */
@@ -240,7 +242,7 @@ export class SwarmChat {
           const usersBatch: UserWithIndex[] = validUsers as unknown as UserWithIndex[];
           aggregatedList = [...usersBatch];
 
-          const thresholdTime = Date.now() - 60 * 1000;              // Threshold is 1 minute
+          const thresholdTime = Date.now() - 1 * MINUTE;             // Threshold is 1 minute
           let lastTimestamp = Date.now();
 
           if (this.gateway) break;                                   // This feed is not used for registration in gateway mode, so we are done
@@ -325,9 +327,9 @@ export class SwarmChat {
       if (this.gateway) {
         if (this.gsocSubscribtion) {                                                   // Only the Gateway is doing Activity Analysis (removeIdleUsers is called by this function)
           this.startActivityAnalyzes(topic, address, stamp as BatchId);
-          console.info("You are the Gateway")
+          this.logger.info("You are the Gateway");
         } else {
-          console.info("You are not the Gateway")
+          this.logger.info("You are not the Gateway");
         }
       } else {
         this.startActivityAnalyzes(topic, address, stamp as BatchId);                  // Every User is doing Activity Analysis (when not in gateway mode), and one of them is selected to write the UsersFeed
@@ -401,25 +403,16 @@ export class SwarmChat {
     return this.utils.orderMessages(messages);
   }
 
-  // Every User is doing Activity Analysis, and one of them is selected to write the UsersFeed
-  private async startActivityAnalyzes(topic: string, ownAddress: EthAddress, stamp: BatchId) {
-    try {
-      this.logger.info("Starting Activity Analysis...");
-      this.removeIdleUsersInterval = setInterval(() => this.removeIdleUsers(topic, ownAddress, stamp), this.REMOVE_INACTIVE_USERS_INTERVAL);
-
-    } catch (error) {
-      this.handleError({
-        error: error as unknown as Error,
-        context: `startActivityAnalyzes`,
-        throw: false
-      });
-    }
+  /** Every User is doing Activity Analysis, and one of them is selected to write the UsersFeed */
+  private startActivityAnalyzes(topic: string, ownAddress: EthAddress, stamp: BatchId) {
+    this.logger.info("Starting Activity Analysis...");
+    this.removeIdleUsersInterval = setInterval(() => this.removeIdleUsers(topic, ownAddress, stamp), this.REMOVE_INACTIVE_USERS_INTERVAL);
   }
 
-  // Used for Activity Analysis, creates or updates entry in the activity table
-  private async updateUserActivityAtRegistration() {
+  /** Used for Activity Analysis, creates or updates entry in the activity table */
+  private updateUserActivityAtRegistration() {
     try {
-      
+
       for (let i = 0; i < this.newlyRegisteredUsers.length; i++) {
         const address = this.newlyRegisteredUsers[i].address;
         this.logger.info(`New user registered. Inserting ${this.newlyRegisteredUsers[i].timestamp} to ${address}`);
@@ -443,29 +436,20 @@ export class SwarmChat {
     }
   }
 
-  // Used for Activity Analysis, saves last message timestamp into activity table
-  private async updateUserActivityAtNewMessage(theNewMessage: MessageData) {
-    try {
-      this.logger.trace(`New message (updateUserActivityAtNewMessage):  ${theNewMessage}`);
+  /** Used for Activity Analysis, saves last message timestamp into activity table */
+  private updateUserActivityAtNewMessage(theNewMessage: MessageData) {
+    this.logger.trace(`New message (updateUserActivityAtNewMessage):  ${theNewMessage}`);
 
-      this.userActivityTable[theNewMessage.address] = {
-        timestamp: theNewMessage.timestamp,
-        readFails: 0
-      }
-
-      this.logger.trace(`User Activity Table (new message received):  ${this.userActivityTable}`);
-
-    } catch (error) {
-      this.handleError({
-        error: error as unknown as Error,
-        context: `updateUserActivityAtNewMessage`,
-        throw: false
-      });
+    this.userActivityTable[theNewMessage.address] = {
+      timestamp: theNewMessage.timestamp,
+      readFails: 0
     }
+
+    this.logger.trace(`User Activity Table (new message received):  ${this.userActivityTable}`);
   }
 
-  // Every user is taking part in removeIdleUsers (Activity Analysis), but only one of them will be selected, for writting the Users feed 
-  // This selection is pseudo-random, and it should select the same user in every app instance
+  /** Every user is taking part in removeIdleUsers (Activity Analysis), but only one of them will be selected, for writting the Users feed 
+      This selection is pseudo-random, and it should select the same user in every app instance */
   private async removeIdleUsers(topic: string, ownAddress: EthAddress, stamp: BatchId) {
     try {
       if (this.reqCount < 32) return; // Newly registered users shouldn't take part in this.
@@ -494,7 +478,7 @@ export class SwarmChat {
         if (!this.gsocSubscribtion) throw "Only Gateway should run  this function in gateway mode!";
         selectedUser = ownAddress;                                // removeIdleUsers wouldn't run, if you wouldn't be the Gateway (when in gateway mode)
       } else {
-        selectedUser = this.utils.selectUsersFeedCommitWriter(activeUsers, this.emitStateEvent.bind(this));
+        selectedUser = await this.utils.selectUsersFeedCommitWriter(activeUsers, this.emitStateEvent.bind(this));
       }
 
       if (selectedUser === ownAddress) {
@@ -514,7 +498,7 @@ export class SwarmChat {
     }
   }
 
-  // Write a UsersFeedCommit to the Users feed, which might remove some inactive users from the readMessagesForAll loop
+  /** Write a UsersFeedCommit to the Users feed, which might remove some inactive users from the readMessagesForAll loop */
   private async writeUsersFeedCommit(topic: string, stamp: BatchId, activeUsers: UserWithIndex[]) {
     try {
       this.logger.info("The user was selected for submitting the UsersFeedCommit! (removeIdleUsers)");
@@ -529,7 +513,6 @@ export class SwarmChat {
 
       const feedWriter = this.utils.graffitiFeedWriterFromTopic(this.bee, topic, { timeout: this.USERS_FEED_TIMEOUT });
 
-     // new code 
       if (!this.usersFeedIndex) {
         console.info("Fetching current index...")
         try {
@@ -562,12 +545,12 @@ export class SwarmChat {
     }
   }
 
-  // Adds a getNewUsers to the usersQueue, which will fetch new users
+  /** Adds a getNewUsers to the usersQueue, which will fetch new users  */
   private tryUserFetch(topic: string) {
     if (!this.userFetchIsRunning) {
       this.getNewUsers(topic);
     } else {
-      console.info("Previous getNewUsers is still running");
+      this.logger.info("Previous getNewUsers is still running");
     }
   }
 
@@ -579,15 +562,13 @@ export class SwarmChat {
       this.userFetchIsRunning = true;
     
       const feedReader = this.utils.graffitiFeedReaderFromTopic(this.bee, topic);
-     console.info(`Downloading UsersFeedCommit at index ${this.usersFeedIndex}`) 
       const feedEntry = await feedReader.download({ index: this.usersFeedIndex });
-    console.log(`feedEntry: ${feedEntry.reference}`)
       const data = await this.bee.downloadData(feedEntry.reference, { 
         headers: { 
           'Swarm-Redundancy-Level': "0"
         }
       });
-    console.log(`Data downloaded.`)
+
       const objectFromFeed = data.json() as unknown as UsersFeedCommit;
       this.logger.debug(`New UsersFeedCommit received!  ${objectFromFeed}`)
     
@@ -652,6 +633,7 @@ export class SwarmChat {
     }
   }
 
+  /** When in gateway mode, the Gateway (aggregator) will add the new user to the Users feed with this function */
   private userRegisteredThroughGsoc(topic: string, stamp: BatchId, gsocMessage: string) {
     try {
       // Validation happens in subscribeToGsoc
@@ -669,7 +651,7 @@ export class SwarmChat {
       if (!this.isRegistered(user.address)) {
         const newList = [...this.users, user];
         //this.utils.removeDuplicateUsers(newList);
-  
+  //TODO we are not waiting for this operation to finish, is that good?
         this.writeUsersFeedCommit(
           topic,
           stamp,
@@ -690,7 +672,7 @@ export class SwarmChat {
     }
   }
 
-  // Goes through the users object, and enqueues a readMessage for each assumably active user
+  /** Goes through the users object, and enqueues a readMessage for each assumably active user  */
   private readMessagesForAll(topic: string) {
     return async () => {
       const isWaiting = await this.messagesQueue.waitForProcessing();
@@ -706,7 +688,7 @@ export class SwarmChat {
     };
   }
 
-  // Reads one message, from a user's own feed
+  /** Reads one message, from a user's own feed */
   private async readMessage(user: UserWithIndex, rawTopic: string) {
     try {
       const chatID = this.utils.generateUserOwnedFeedId(rawTopic, user.address);
@@ -735,6 +717,7 @@ export class SwarmChat {
         }
       });
       const messageData = JSON.parse(new TextDecoder().decode(data)) as MessageData;
+      this.utils.validateMessageData(messageData);
     
       const uIndex = this.users.findIndex((u) => (u.address === user.address));
       const newUsers = this.users;
@@ -776,7 +759,7 @@ export class SwarmChat {
     }
   }
 
-  // Adjusts maxParallel and message fetch interval
+  /** Adjusts maxParallel and message fetch interval */
   //TODO this might be an utils function, but we need to pass a lot of paramerers, and in the other direction as well (return)
   private adjustParamerets(topic: string) {
     // Adjust max parallel request count, based on avg request time, which indicates, how much the node is overloaded
@@ -838,21 +821,28 @@ export class SwarmChat {
     }
   }
 
-  // Writes the users object, will avoid collision with other write operation
-  // Would cause a hot loop if usersLoading would be true, but we don't expect that to happen
+  /** Writes the users object, will avoid collision with other write operation
+      Would cause a hot loop if usersLoading would be true, but we don't expect that to happen */
   private setUsers(newUsers: UserWithIndex[]) {
-    let success = false;
-    do {
-      if (!this.usersLoading) {
-        this.usersLoading = true;
-        this.users = newUsers;
-        this.usersLoading = false;
-        success = true;
-      }
-    } while (!success)
+    //TODO this whole thing is most likely not needed, because there is no concurrency in JS. It can not happen. There never will be a collision in this.users write.
+    if (this.usersLoading) {
+      return new Promise<void>((resolve) => {
+        const interval = setInterval(() => {
+          if (!this.usersLoading) {
+            clearInterval(interval);
+            this.setUsers(newUsers);
+            resolve();
+          }
+        }, 50);
+      });
+    }
+
+    this.usersLoading = true;
+    this.users = newUsers;
+    this.usersLoading = false;
   }
 
-  // Emit event about state change
+  /** Emit event about state change */
   private emitStateEvent(event: string, value: any) {
     if (this.eventStates[event] !== value) {
       this.eventStates[event] = value;
@@ -872,18 +862,38 @@ export class SwarmChat {
 
   /** Returns the current message check interval, which is dynamic */
   public getMessageCheckInterval() {
-    return this.messageFetchClock;
+    return this.mInterval;
   }
 
   /** Returns the USER_UPDATE_INTERVAL constant, that can be set when creating a new SwarmChat instance */
   public getUserUpdateIntervalConst() {
     return this.USER_UPDATE_INTERVAL;
   }
+  
+  /** Returns GSOC Subscription address or null */
+  public getGsocAddress() {
+    if (!this.gsocSubscribtion) return null;
+    else return this.gsocSubscribtion.gsocAddress;
+  }
 
-  /** Clears the Users fetch queue, so we don't update user list with obsolate records */
-  public resetUsersQueue() {
-    //TODO most likely we won't use this
-    this.usersQueue.clearQueue();
+  /** Returns the Bee instance that the library is using */
+  public getBeeInstance(): Bee {
+    return this.bee;
+  }
+  
+  /** Return the gateway (overlay address), gives back empty string, if no gateway */
+  public getGateway(): string {
+    return this.gateway;
+  }
+  
+  /** Returns the GSOC resource ID, gives back empty string, if not set */
+  public getGsocResourceId(): string {
+    return this.gsocResourceId;
+  }
+  
+  /** Returns the event emitter that is loaded in the instance */
+  public getEmitter(): EventEmitter {
+    return this.emitter;
   }
 
   private handleError(errObject: ErrorObject) {
@@ -930,10 +940,14 @@ export class SwarmChat {
       userActivityTable: this.userActivityTable,
       newlyResigeredUsers: this.newlyRegisteredUsers,
       requestCount: this.reqCount,
+      userFetchClockExists: this.userFetchClock !== null,
+      messageFetchClockExists: this.messageFetchClock !== null,
+      removeInactiveUsersInterval: this.REMOVE_INACTIVE_USERS_INTERVAL
     }
   }
 
-  async host(roomTopic: string, stamp: BatchId) {
+  /** In gateway mode, the host will init the chat, and add new users to the Users feed */
+  public async host(roomTopic: string, stamp: BatchId) {
     const isNode = typeof window === 'undefined' && typeof global !== 'undefined';
     if (!isNode) {
       this.handleError({
@@ -952,5 +966,21 @@ export class SwarmChat {
     do {
       await this.utils.sleep(5000);
     } while (true)
+  }
+
+  /** Stop all intervals */
+  public stop() {
+    if (this.removeIdleUsersInterval) {
+      clearInterval(this.removeIdleUsersInterval);
+      this.removeIdleUsersInterval = null;
+    }
+    if (this.userFetchClock) {
+      clearInterval(this.userFetchClock);
+      this.userFetchClock = null;
+    }
+    if (this.messageFetchClock) {
+      clearInterval(this.messageFetchClock);
+      this.messageFetchClock = null;
+    }
   }
 }

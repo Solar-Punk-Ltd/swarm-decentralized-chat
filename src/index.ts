@@ -2,7 +2,7 @@
 export { SwarmChat } from './core';
 
 // Constants
-export {  EVENTS } from './constants';
+export { EVENTS } from './constants';
 
 // Types
 export type { 
