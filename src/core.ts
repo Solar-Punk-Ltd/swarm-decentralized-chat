@@ -514,7 +514,7 @@ export class SwarmChat {
       const feedWriter = this.utils.graffitiFeedWriterFromTopic(this.bee, topic, { timeout: this.USERS_FEED_TIMEOUT });
 
       if (!this.usersFeedIndex) {
-        console.info("Fetching current index...")
+        this.logger.info("Fetching current index...")
         try {
           const currentIndex = await feedWriter.download();
           this.usersFeedIndex = this.utils.hexStringToNumber(currentIndex.feedIndexNext);
@@ -524,12 +524,7 @@ export class SwarmChat {
         }
       }
       
-      console.info("Writing UsersFeedCommit to index ", this.usersFeedIndex)
-      let usersForLog = "";   //TODO remove after debugging
-      usersToWrite.map((uObj) => { //TODO remove after debugging
-        usersForLog = usersForLog.concat(` ${uObj.username}(${uObj.address})`)
-      });
-      console.info(`These users were written (${usersToWrite.length}):  ${usersForLog}\n`);
+      this.logger.info("Writing UsersFeedCommit to index ", this.usersFeedIndex)
       await feedWriter.upload(stamp, userRef.reference, { index: this.usersFeedIndex });
       this.usersFeedIndex++;
       this.logger.debug("Upload was successful!");

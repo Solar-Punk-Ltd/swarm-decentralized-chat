@@ -657,9 +657,6 @@ describe('removeIdleUsers', () => {
     jest.restoreAllMocks();
   });
 
-  afterEach(() => {
-  });
-
   it('should return for new users', async () => {
     const getActiveUsersSpy = jest.spyOn((chat as any).utils, 'getActiveUsers');
     const writeUsersFeedCommitSpy = jest.spyOn(chat as any, 'writeUsersFeedCommit');
@@ -761,5 +758,97 @@ describe('removeIdleUsers', () => {
     expect(getActiveUsersSpy).toHaveReturnedWith([{ address: '0x123', index: 1 }]);
     expect(writeUsersFeedCommitSpy).toHaveBeenCalled();
     expect(setUsersSpy).toHaveBeenCalled();
+  });
+});
+
+
+describe('writeUsersFeedCommit', () => {
+  let chat: SwarmChat;
+
+  beforeEach(() => {
+    chat = new SwarmChat();
+    jest.resetAllMocks();
+    jest.resetAllMocks();
+  });
+
+  it('should log user was selected message, in info mode', () => {
+    chat.changeLogLevel('info');
+    const loggerInfoSpy = jest.spyOn((chat as any).logger, 'info');
+
+    (chat as any).writeUsersFeedCommit("example-topic", "000" as BatchId, "0x123" as EthAddress);
+
+    expect(loggerInfoSpy).toHaveBeenCalledWith("The user was selected for submitting the UsersFeedCommit! (removeIdleUsers)");
+  });
+
+  it('should call removeDuplicateUsers', () => {
+    const removeDuplicateUsersSpy = jest.spyOn((chat as any).utils, 'removeDuplicateUsers');
+
+    (chat as any).writeUsersFeedCommit("example-topic", "000" as BatchId, ["0x123" as EthAddress]);
+
+    expect(removeDuplicateUsersSpy).toHaveBeenCalledWith(["0x123"]);
+  });
+
+  it('should call uploadObjectToBee', async () => {
+    const uploadObjectToBeesSpy = jest.spyOn((chat as any).utils, 'uploadObjectToBee');
+
+    (chat as any).writeUsersFeedCommit("example-topic", "000" as BatchId, ["0x123" as EthAddress]);
+
+    expect(uploadObjectToBeesSpy).toHaveBeenCalled();
+  });
+
+  it('should throw error if uploadObjectToBee fails', async () => {
+    const uploadObjectToBeeSpy = jest.spyOn((chat as any).utils, 'uploadObjectToBee');
+    const handleErrorSpy = jest.spyOn((chat as any), 'handleError');
+    uploadObjectToBeeSpy.mockReturnValue(null);
+
+    await (chat as any).writeUsersFeedCommit("example-topic", "000" as BatchId, ["0x123" as EthAddress]);
+    
+    expect(handleErrorSpy).toHaveBeenCalledWith({
+      error: Error("Could not upload user list to bee"),
+      context: 'writeUsersFeedCommit',
+      throw: false
+    });
+  });
+
+  it('should call graffitiFeedWriterFromTopic', async () => {
+    const graffitiFeedWriterFromTopicSpy = jest.spyOn((chat as any).utils, 'graffitiFeedWriterFromTopic');
+    const uploadObjectToBeeSpy = jest.spyOn((chat as any).utils, 'uploadObjectToBee');
+    uploadObjectToBeeSpy.mockReturnValue("SwarmRef");
+
+    await (chat as any).writeUsersFeedCommit("example-topic", "000" as BatchId, ["0x123" as EthAddress]);
+
+    expect(graffitiFeedWriterFromTopicSpy).toHaveBeenCalled();
+  });
+
+  it('should fetch feed index, if usersFeedIndex is falsy', async () => {
+    chat.changeLogLevel('info');
+    const loggerInfoSpy = jest.spyOn((chat as any).logger, 'info');
+    const hexStringToNumberSpy = jest.spyOn((chat as any).utils, 'hexStringToNumber');
+    const uploadObjectToBeeSpy = jest.spyOn((chat as any).utils, 'uploadObjectToBee');
+    uploadObjectToBeeSpy.mockReturnValue("SwarmRef");
+
+    await (chat as any).writeUsersFeedCommit("example-topic", "000" as BatchId, ["0x123" as EthAddress]);
+
+    expect(loggerInfoSpy).toHaveBeenCalledWith("Fetching current index...");
+    expect(hexStringToNumberSpy).toHaveBeenCalled();
+  });
+
+  it('should write UsersFeedCommit to feed', async () => {
+    chat.changeLogLevel('info');
+    chat['usersFeedIndex'] = 5;
+    const loggerInfoSpy = jest.spyOn((chat as any).logger, 'info');
+    const uploadObjectToBeeSpy = jest.spyOn((chat as any).utils, 'uploadObjectToBee');
+    uploadObjectToBeeSpy.mockResolvedValue({ reference: 'mockSwarmRef' });
+    const graffitiFeedWriterFromTopicSpy = jest.spyOn((chat as any).utils, 'graffitiFeedWriterFromTopic');
+    const mockFeedWriter = {
+      upload: jest.fn().mockResolvedValue(undefined),
+      download: jest.fn().mockResolvedValue({ feedIndexNext: '0x1' }),
+    };
+    graffitiFeedWriterFromTopicSpy.mockReturnValue(mockFeedWriter);
+
+    await (chat as any).writeUsersFeedCommit("example-topic", "000" as BatchId, ["0x123" as EthAddress]);
+
+    expect(loggerInfoSpy).toHaveBeenLastCalledWith("Writing UsersFeedCommit to index ", 5);
+    expect(mockFeedWriter.upload).toHaveBeenCalled();
   });
 });
