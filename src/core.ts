@@ -690,7 +690,7 @@ export class SwarmChat {
         currIndex = latestIndex === -1 ? nextIndex : latestIndex;
       }
     
-      this.adjustParamerets(rawTopic);      
+      this.adjustParameters(rawTopic);
 
       // We measure the request time with the first Bee API request, with the second request, we do not do this, because it is very similar
       const feedReader = this.bee.makeFeedReader('sequence', topic, user.address, { timeout: this.MAX_TIMEOUT });
@@ -717,17 +717,11 @@ export class SwarmChat {
       if (messageData.timestamp + this.IDLE_TIME*2 > Date.now()) {
         this.messages.push(messageData);
         
-        // TODO GSOC - this needs to be conditional, only Gateway is doing this. It's not a problem if other users are doing it as well, but has no significance
         // Update userActivityTable
         this.updateUserActivityAtNewMessage(messageData);
 
         this.messagesIndex++;
       }
-    
-      // TODO - discuss with the team
-      /*if (messages.length > 300) {
-        messages.shift();
-      }*/
     
       this.emitter.emit(EVENTS.RECEIVE_MESSAGE, this.messages);
     } catch (error) {
@@ -750,7 +744,7 @@ export class SwarmChat {
 
   /** Adjusts maxParallel and message fetch interval */
   //TODO this might be an utils function, but we need to pass a lot of paramerers, and in the other direction as well (return)
-  private adjustParamerets(topic: string) {
+  private adjustParameters(topic: string) {
     // Adjust max parallel request count, based on avg request time, which indicates, how much the node is overloaded
     if (this.reqTimeAvg.getAverage() > this.DECREASE_LIMIT) this.messagesQueue.decreaseMax();
     if (this.reqTimeAvg.getAverage() < this.INCREASE_LIMIT) this.messagesQueue.increaseMax(this.users.length * 1);

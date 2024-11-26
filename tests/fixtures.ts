@@ -50,6 +50,27 @@ function generateAlphabeticalNames(n: number): string[] {
   return names;
 }
 
+export async function generateAlice() {
+  const wallet = new Wallet("0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae3d8e226e01fdf99");
+
+
+  const alice: UserWithIndex = {
+    index: 0,
+    username: "Alice",
+    address: wallet.address as EthAddress,
+    timestamp: 1231006505000,
+    signature: (await wallet.signMessage(
+      JSON.stringify({
+        username: "Alice",
+        address: wallet.address,
+        timestamp: 1231006505000,
+      })
+    )) as unknown as Signature,
+  }
+
+  return alice;
+}
+
 export function createMockActivityTable(users: User[], timestamps: number[] = []): UserActivity {
   return users.reduce((acc, user, index) => {
     // If timestamps array is provided, use the value from the array; otherwise, use the user's timestamp

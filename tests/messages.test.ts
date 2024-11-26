@@ -1,5 +1,6 @@
+import { EVENTS } from "../src/constants";
 import { SwarmChat } from "../src/core";
-import { randomizeMessages, someMessages, userListWithNUsers } from "./fixtures";
+import { generateAlice, randomizeMessages, someMessages, userListWithNUsers } from "./fixtures";
 
 
 describe('orderMessages (interface for external usage)', () => {
@@ -54,5 +55,191 @@ describe('readMessagesForAll', () => {
     users.forEach(user => 
       expect(readMessageSpy).toHaveBeenCalledWith(user, "example-topic")
     );
+  });
+});
+
+
+describe('readMessage', () => {
+  let chat: SwarmChat;
+  const topic = "swarm-topic";
+
+  beforeEach(() => {
+    jest.resetAllMocks();
+
+    chat = new SwarmChat();
+  });
+
+  it('should call generateUserOwnedFeedId and makeFeedTopic', async () => {
+    const alice = await generateAlice();
+    const generateUserOwnedFeedIdSpy = jest.spyOn((chat as any).utils, 'generateUserOwnedFeedId');
+    const makeFeedTopicSpy = jest.spyOn((chat as any).bee, 'makeFeedTopic');
+    const readMessageSpy = jest.spyOn((chat as any), 'readMessage');
+    //readMessageSpy.mockImplementation(() => { return null });
+
+    await (chat as any).readMessage(alice, topic);
+
+    expect(generateUserOwnedFeedIdSpy).toHaveBeenCalledWith(topic, alice.address);
+    expect(makeFeedTopicSpy).toHaveBeenCalledWith("swarm-topic_EthercastChat_0x683E8486b1b9bCa5f28cC65129B26f3c6bec4a35");
+  });
+
+  it('should call getLatestFeedIndex if index is -1', async () => {
+    const alice = await generateAlice();
+    alice.index = -1;
+    const getLatestFeedIndexSpy = jest.spyOn((chat as any).utils, 'getLatestFeedIndex');
+
+    await (chat as any).readMessage(alice, topic);
+
+    expect(getLatestFeedIndexSpy).toHaveBeenCalledWith(chat['bee'], "51c7697d0930d6efba914cdfe9ddc3edcc19eb0db416a89460ac3c0c52566599", alice.address);
+  });
+
+  it('should not call getLatestFeedIndex if index is not -1', async () => {
+    const alice = await generateAlice();
+    const getLatestFeedIndexSpy = jest.spyOn((chat as any).utils, 'getLatestFeedIndex');
+
+    await (chat as any).readMessage(alice, topic);
+
+    expect(getLatestFeedIndexSpy).not.toHaveBeenCalled();
+  });
+
+  it('should call adjustParamerets', async () => {
+    const alice = await generateAlice();
+    const adjustParametersSpy = jest.spyOn(chat as any, 'adjustParameters');
+
+    await (chat as any).readMessage(alice, topic);
+
+    expect(adjustParametersSpy).toHaveBeenCalled();
+  });
+
+  it('should create feedReader', async () => {
+    const alice = await generateAlice();
+    const makeFeedReaderSpy = jest.fn().mockImplementation(() => ({
+      download: (index: number) => { return { reference: "SwarmReference" }}
+    }));
+    chat['bee'].makeFeedReader = makeFeedReaderSpy;
+
+    await (chat as any).readMessage(alice, topic);
+
+    expect(makeFeedReaderSpy).toHaveBeenCalled();
+  });
+
+  it('should call downloadData', async () => {
+    const alice = await generateAlice();
+    const makeFeedReaderSpy = jest.fn().mockImplementation(() => ({
+      download: (index: number) => { return { reference: "SwarmReference" }}
+    }));
+    const downloadDataSpy = jest.fn().mockImplementation(() => null);
+    chat['bee'].makeFeedReader = makeFeedReaderSpy;
+    chat['bee'].downloadData = downloadDataSpy;
+
+    await (chat as any).readMessage(alice, topic);
+
+    expect(makeFeedReaderSpy).toHaveBeenCalled();
+  });
+
+  it('should validateMessageData', async () => {
+    const alice = await generateAlice();
+    const message = someMessages([alice], 1)[0];
+    const makeFeedReaderSpy = jest.fn().mockImplementation(() => ({
+      download: (index: number) => { return { reference: "SwarmReference" }}
+    }));
+    const downloadDataSpy = jest.fn().mockImplementation((input) => "json");
+    const textDecoderMock = {
+      decode: jest.fn().mockReturnValue(JSON.stringify(message))
+    };
+    global.TextDecoder = jest.fn(() => textDecoderMock) as any;
+    const jsonParseSpy = jest.spyOn(JSON, 'parse').mockImplementation(() => message);
+    const validateMessageDataSpy = jest.spyOn((chat as any).utils, 'validateMessageData');
+
+    chat['bee'].makeFeedReader = makeFeedReaderSpy;
+    chat['bee'].downloadData = downloadDataSpy;
+
+    await (chat as any).readMessage(alice, topic);
+
+    expect(jsonParseSpy).toHaveBeenCalled()
+    expect(validateMessageDataSpy).toHaveBeenCalledWith(message);
+  });
+
+  it('should not add message to messages array if timestamp is too old', async () => {
+    const alice = await generateAlice();
+    const message = someMessages([alice], 1)[0];
+    message.timestamp = Date.now() - (chat['IDLE_TIME'] * 3); // Make message very old
+    
+    const makeFeedReaderSpy = jest.fn().mockImplementation(() => ({
+      download: (index: number) => { return { reference: "SwarmReference" }}
+    }));
+    const downloadDataSpy = jest.fn().mockImplementation(() => 
+      new TextEncoder().encode(JSON.stringify(message))
+    );
+
+    chat['bee'].makeFeedReader = makeFeedReaderSpy;
+    chat['bee'].downloadData = downloadDataSpy;
+
+    const initialMessagesLength = chat['messages'].length;
+    await (chat as any).readMessage(alice, topic);
+
+    expect(chat['messages'].length).toBe(initialMessagesLength);
+  });
+
+  it('should handle timeout error', async () => {
+    const alice = await generateAlice();
+    const loggerInfoSpy = jest.spyOn(chat['logger'], 'info');
+    
+    const makeFeedReaderSpy = jest.fn().mockImplementation(() => ({
+      download: () => { 
+        throw new Error('timeout exceeded');
+      }
+    }));
+
+    chat['bee'].makeFeedReader = makeFeedReaderSpy;
+
+    await (chat as any).readMessage(alice, topic);
+
+    expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining(`Timeout of ${chat['MAX_TIMEOUT']} exceeded`));
+  });
+
+  it('should increment read fails for non-not-found errors', async () => {
+    const alice = await generateAlice();
+    const testError = new Error('Some random error');
+    
+    const makeFeedReaderSpy = jest.fn().mockImplementation(() => ({
+      download: () => { 
+        throw testError;
+      }
+    }));
+
+    chat['bee'].makeFeedReader = makeFeedReaderSpy;
+    chat['userActivityTable'][alice.address] = { readFails: 0, timestamp: Date.now() };
+
+    const isNotFoundErrorSpy = jest.spyOn(chat['utils'], 'isNotFoundError').mockReturnValue(false);
+    const handleErrorSpy = jest.spyOn(chat as any, 'handleError');
+
+    await (chat as any).readMessage(alice, topic);
+
+    expect(chat['userActivityTable'][alice.address].readFails).toBe(1);
+    expect(handleErrorSpy).toHaveBeenCalledWith({
+      error: testError,
+      context: 'readMessage',
+      throw: false
+    });
+  });
+
+  it('should not increment read fails for not-found errors', async () => {
+    const alice = await generateAlice();
+    const notFoundError = new Error('Not found');
+    
+    const makeFeedReaderSpy = jest.fn().mockImplementation(() => ({
+      download: () => { 
+        throw notFoundError;
+      }
+    }));
+
+    chat['bee'].makeFeedReader = makeFeedReaderSpy;
+    chat['userActivityTable'][alice.address] = { readFails: 0, timestamp: Date.now() };
+
+    const isNotFoundErrorSpy = jest.spyOn(chat['utils'], 'isNotFoundError').mockReturnValue(true);
+
+    await (chat as any).readMessage(alice, topic);
+
+    expect(chat['userActivityTable'][alice.address].readFails).toBe(0);
   });
 });
