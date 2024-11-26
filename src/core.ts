@@ -638,16 +638,10 @@ export class SwarmChat {
         index: -1
       };
 
-      console.info("\n------Length of users list at userRegisteredThroughGsoc: ", this.users.length)
-      if (this.users.length > 0) {
-        console.info("Addres at last index: ", this.users[this.users.length-1].address);
-        console.info("Username at last index: ", this.users[this.users.length-1].username);
-      }
+      if (!this.utils.validateUserObject(user)) throw "This user object is invalid!";
 
       if (!this.isRegistered(user.address)) {
         const newList = [...this.users, user];
-        //this.utils.removeDuplicateUsers(newList);
-  //TODO we are not waiting for this operation to finish, is that good?
         this.writeUsersFeedCommit(
           topic,
           stamp,

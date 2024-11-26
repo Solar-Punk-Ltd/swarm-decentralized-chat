@@ -1019,3 +1019,112 @@ describe('getNewUsers', () => {
     expect(chat['usersFeedIndex']).toBe(initialIndex + 1);
   });
 });
+
+
+describe('userRegisteredThroughGsoc', () => {
+  let chat: SwarmChat;
+  const topic = "exampleTopic";
+  const stamp = "exampleStamp";
+
+  beforeEach(() => {
+    jest.resetAllMocks();
+
+    chat = new SwarmChat();
+
+  });
+
+  it('should add a new user when not already registered', async () => {
+    const isRegisteredSpy = jest.spyOn(chat, 'isRegistered').mockReturnValue(false);
+    const writeUsersFeedCommitSpy = jest.spyOn(chat as any, 'writeUsersFeedCommit');
+    const setUsersSpy = jest.spyOn(chat as any, 'setUsers');
+    const updateUserActivitySpy = jest.spyOn(chat as any, 'updateUserActivityAtRegistration');
+
+    const user = (await userListWithNUsers(1))[0];
+    const gsocMessage = JSON.stringify(user);
+
+    (chat as any).userRegisteredThroughGsoc(topic, stamp, gsocMessage);
+
+    expect(isRegisteredSpy).toHaveBeenCalledWith(user.address);
+    expect(writeUsersFeedCommitSpy).toHaveBeenCalledWith(topic, stamp, expect.any(Array));
+    expect(setUsersSpy).toHaveBeenCalledWith(expect.any(Array));
+    expect(updateUserActivitySpy).toHaveBeenCalled();
+
+    expect(writeUsersFeedCommitSpy.mock.calls[0][2]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          ...user,
+          index: -1
+        })
+      ])
+    );
+  });
+
+  it('should not add a user that is already registered', async () => {
+    const isRegisteredSpy = jest.spyOn(chat, 'isRegistered').mockReturnValue(true);
+    const writeUsersFeedCommitSpy = jest.spyOn(chat as any, 'writeUsersFeedCommit');
+    const setUsersSpy = jest.spyOn(chat as any, 'setUsers');
+    const updateUserActivitySpy = jest.spyOn(chat as any, 'updateUserActivityAtRegistration');
+
+    const mockUser = (await userListWithNUsers(1))[0];
+    const gsocMessage = JSON.stringify(mockUser);
+
+    (chat as any).userRegisteredThroughGsoc(topic, stamp, gsocMessage);
+
+    expect(isRegisteredSpy).toHaveBeenCalledWith(mockUser.address);
+    expect(writeUsersFeedCommitSpy).not.toHaveBeenCalled();
+    expect(setUsersSpy).not.toHaveBeenCalled();
+    expect(updateUserActivitySpy).toHaveBeenCalled();
+  });
+
+  it('should handle invalid JSON gracefully', () => {
+    const handleErrorSpy = jest.spyOn(chat as any, 'handleError');
+
+    const invalidGsocMessage = '{invalid json}';
+
+    (chat as any).userRegisteredThroughGsoc(topic, stamp, invalidGsocMessage);
+
+    expect(handleErrorSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: 'userRegisteredThroughGsoc',
+        throw: false
+      })
+    );
+  });
+
+  it('should handle missing user properties', () => {
+    const handleErrorSpy = jest.spyOn(chat as any, 'handleError');
+
+    const incompleteUser = { someProperty: 'value' };
+    const gsocMessage = JSON.stringify(incompleteUser);
+
+    (chat as any).userRegisteredThroughGsoc(topic, stamp, gsocMessage);
+
+    expect(handleErrorSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: 'userRegisteredThroughGsoc',
+        throw: false
+      })
+    );
+  });
+});
+
+
+describe('host', () => {
+  let chat: SwarmChat;
+
+  beforeEach(() => {
+    jest.resetAllMocks();
+
+    chat = new SwarmChat();
+  });
+
+  it('should call initChatRoom with proper parameters');
+
+  it('should call startMessageFetchProcess');
+
+  it('should call startActivityAnalyzes');
+
+  it('should not quit');
+
+  it('should throw error if environment is not Node');
+});
