@@ -1,6 +1,8 @@
+import { Wallet } from "ethers";
 import { EVENTS } from "../src/constants";
 import { SwarmChat } from "../src/core";
 import { generateAlice, randomizeMessages, someMessages, userListWithNUsers } from "./fixtures";
+import { BatchId, Reference } from "@ethersphere/bee-js";
 
 
 describe('orderMessages (interface for external usage)', () => {
@@ -74,7 +76,6 @@ describe('readMessage', () => {
     const generateUserOwnedFeedIdSpy = jest.spyOn((chat as any).utils, 'generateUserOwnedFeedId');
     const makeFeedTopicSpy = jest.spyOn((chat as any).bee, 'makeFeedTopic');
     const readMessageSpy = jest.spyOn((chat as any), 'readMessage');
-    //readMessageSpy.mockImplementation(() => { return null });
 
     await (chat as any).readMessage(alice, topic);
 
@@ -241,5 +242,119 @@ describe('readMessage', () => {
     await (chat as any).readMessage(alice, topic);
 
     expect(chat['userActivityTable'][alice.address].readFails).toBe(0);
+  });
+});
+
+
+describe('sendMessage', () => {
+  let chat: SwarmChat;
+  const topic = "swarm-chat-topic";
+  const stamp = "valid-stamp" as BatchId;
+  
+  beforeEach(() => {
+    chat = new SwarmChat();
+  });
+  
+  it('should throw private key is missing error when private key is missing', async () => {
+    const alice = await generateAlice();
+    const wallet = new Wallet("0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae3d8e226e01fdf99");
+    const message = someMessages([alice], 1)[0];
+    const handleErrorSpy = jest.spyOn(chat as any, 'handleError');
+
+    chat.sendMessage(alice.address, topic, message, stamp, "");
+
+    expect(handleErrorSpy).toHaveBeenCalledWith(expect.objectContaining({
+      error: "Private key is missing"
+    }));
+  });
+
+  it('should call generateUserOwnedFeedId and makeFeedTopic', async () => {
+    const alice = await generateAlice();
+    const wallet = new Wallet("0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae3d8e226e01fdf99");
+    const message = someMessages([alice], 1)[0];
+    const generateUserOwnedFeedIdSpy = jest.spyOn((chat as any).utils, 'generateUserOwnedFeedId');
+    const makeFeedTopicSpy = jest.spyOn((chat as any).bee, 'makeFeedTopic');
+
+    await chat.sendMessage(alice.address, topic, message, stamp, wallet.privateKey);
+
+    expect(generateUserOwnedFeedIdSpy).toHaveBeenCalledWith(topic, alice.address);
+    expect(makeFeedTopicSpy).toHaveBeenCalledWith("swarm-chat-topic_EthercastChat_0x683E8486b1b9bCa5f28cC65129B26f3c6bec4a35");
+  });
+
+  it('should call getLatestFeedIndex if ownIndex is -2', async () => {
+    const alice = await generateAlice();
+    const wallet = new Wallet("0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae3d8e226e01fdf99");
+    const message = someMessages([alice], 1)[0];
+    const getLatestFeedIndexSpy = jest.spyOn((chat as any).utils, 'getLatestFeedIndex');
+
+    await chat.sendMessage(alice.address, topic, message, stamp, wallet.privateKey);
+    
+    expect(getLatestFeedIndexSpy).toHaveBeenCalled();
+  });
+  
+  it('should call uploadObjectToBee', async () => {
+    const alice = await generateAlice();
+    const wallet = new Wallet("0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae3d8e226e01fdf99");
+    const message = someMessages([alice], 1)[0];
+    const uploadObjectToBeeSpy = jest.spyOn((chat as any).utils, 'uploadObjectToBee');
+
+    chat['ownIndex'] = 0;
+    await chat.sendMessage(alice.address, topic, message, stamp, wallet.privateKey);
+
+    expect(uploadObjectToBeeSpy).toHaveBeenCalledWith(chat['bee'], message, stamp);
+  });
+
+  it('should throw Could not upload message if msgData is falsy', async () => {
+    const alice = await generateAlice();
+    const wallet = new Wallet("0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae3d8e226e01fdf99");
+    const message = someMessages([alice], 1)[0];
+    const uploadObjectToBeeSpy = jest.spyOn((chat as any).utils, 'uploadObjectToBee');
+    uploadObjectToBeeSpy.mockImplementation(() => false);
+    const handleErrorSpy = jest.spyOn(chat as any, 'handleError');
+
+    chat['ownIndex'] = 0;
+    await chat.sendMessage(alice.address, topic, message, stamp, wallet.privateKey);
+
+    expect(handleErrorSpy).toHaveBeenCalledWith({
+      error: "Could not upload message data to bee",
+      context: `sendMessage, index: 0, message: ${message.message}`,
+      throw: false
+    });
+  });
+
+  it('should upload the reference to the feed', async () => {
+    const alice = await generateAlice();
+    const wallet = new Wallet("0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae3d8e226e01fdf99");
+    const message = someMessages([alice], 1)[0];
+    const uploadObjectToBeeSpy = jest.spyOn((chat as any).utils, 'uploadObjectToBee');
+    uploadObjectToBeeSpy.mockImplementation(() => "SwarmRef");
+    const uploadSpy = jest.fn().mockReturnValue("SwarmRef");
+    const makeFeedWriterSpy = jest.fn().mockImplementation(() => ({
+      upload: uploadSpy
+    }));
+
+    chat['bee'].makeFeedWriter = makeFeedWriterSpy;
+    chat['ownIndex'] = 0;
+    await chat.sendMessage(alice.address, topic, message, stamp, wallet.privateKey);
+
+    expect(uploadSpy).toHaveBeenCalled();
+  });
+
+  it('should increment ownIndex', async () => {
+    const alice = await generateAlice();
+    const wallet = new Wallet("0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae3d8e226e01fdf99");
+    const message = someMessages([alice], 1)[0];
+    const uploadObjectToBeeSpy = jest.spyOn((chat as any).utils, 'uploadObjectToBee');
+    uploadObjectToBeeSpy.mockImplementation(() => "SwarmRef");
+    const uploadSpy = jest.fn().mockReturnValue("SwarmRef");
+    const makeFeedWriterSpy = jest.fn().mockImplementation(() => ({
+      upload: uploadSpy
+    }));
+
+    chat['bee'].makeFeedWriter = makeFeedWriterSpy;
+    chat['ownIndex'] = 0;
+    await chat.sendMessage(alice.address, topic, message, stamp, wallet.privateKey);
+
+    expect(chat['ownIndex']).toBe(1);
   });
 });
