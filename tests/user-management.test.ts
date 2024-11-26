@@ -1,4 +1,4 @@
-import { Wallet } from "ethers";
+import { ethers, Wallet } from "ethers";
 import { SwarmChat } from "../src/core";
 import { Bytes, EthAddress, MessageData, User, UserActivity, UserWithIndex } from "../src/types";
 import { BatchId } from "@ethersphere/bee-js";
@@ -1111,20 +1111,74 @@ describe('userRegisteredThroughGsoc', () => {
 
 describe('host', () => {
   let chat: SwarmChat;
+  const topic = 'test-room';
+  const stamp = '123' as BatchId;
+  const mockIdentity = {
+    address: '0x1234567890123456789012345678901234567890' as EthAddress
+  };
 
+  
   beforeEach(() => {
     jest.resetAllMocks();
-
+    
     chat = new SwarmChat();
+    
+    chat['initChatRoom'] = jest.fn().mockResolvedValue(undefined);
+    chat['startMessageFetchProcess'] = jest.fn();
+    chat['startActivityAnalyzes'] = jest.fn();
+    chat['handleError'] = jest.fn();
+    chat['utils'].sleep = jest.fn().mockResolvedValue(undefined);
+    
+    jest.mock('ethers', () => ({
+      Wallet: {
+        createRandom: jest.fn(() => ({
+          address: '0x1234567890123456789012345678901234567890'
+        }))
+      }
+    }));
   });
 
-  it('should call initChatRoom with proper parameters');
+  it('should call initChatRoom with proper parameters', () => {
+    const initChatRoomSpy = jest.spyOn(chat as any, 'initChatRoom');
+  
+    chat.host(topic, stamp);
 
-  it('should call startMessageFetchProcess');
+    chat.stop();
+  
+    expect(initChatRoomSpy).toHaveBeenCalledWith(topic, stamp);
+  });
 
-  it('should call startActivityAnalyzes');
+  it('should call startMessageFetchProcess', async () => {
+    const startMessageFetchProcessSpy = jest.spyOn(chat as any, 'startMessageFetchProcess');
 
-  it('should not quit');
+    chat.host(topic, stamp);
 
-  it('should throw error if environment is not Node');
+    await chat['utils'].sleep(50);
+
+    chat.stop();
+
+    expect(startMessageFetchProcessSpy).toHaveBeenCalled();
+  });
+
+  it('should call startActivityAnalyzes', async () => {
+    const startActivityAnalyzesSpy = jest.spyOn(chat as any, 'startActivityAnalyzes');
+
+    chat.host(topic, stamp);
+
+    await chat['utils'].sleep(50);
+
+    chat.stop();
+
+    expect(startActivityAnalyzesSpy).toHaveBeenCalled();
+  });
+
+  it('should create a random wallet', async () => {
+    const createRandomSpy = jest.spyOn(ethers.Wallet, 'createRandom');
+
+    chat.host(topic, stamp);
+    await chat['utils'].sleep(50);
+    chat.stop();
+
+    expect(createRandomSpy).toHaveBeenCalled();
+  });
 });

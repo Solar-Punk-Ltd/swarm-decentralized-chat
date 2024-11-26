@@ -51,7 +51,6 @@ export class SwarmChat {
   private emitter = new EventEmitter();
   private messages: MessageData[] = [];
   private reqTimeAvg;
-  private usersQueue: AsyncQueue;
   private messagesQueue: AsyncQueue;
   private users: UserWithIndex[] = [];
   private usersLoading = false;
@@ -68,11 +67,12 @@ export class SwarmChat {
   private removeIdleIsRunning = false;                                      // Avoid race conditions
   private userFetchIsRunning = false;                                       // Wait for the previous getNewUsers to finish
   private userActivityTable: UserActivity = {};                             // Used to remove inactive users
-  private newlyRegisteredUsers: UserWithIndex[] = [];                        // keep track of fresh users
+  private newlyRegisteredUsers: UserWithIndex[] = [];                       // keep track of fresh users
   private reqCount = 0;                                                     // Diagnostics only
   //private prettyStream = null;
   private logger = pino(/*this.prettyStream*/);                                 // Logger. Levels: "fatal" | "error" | "warn" | "info" | "debug" | "trace" | "silent"
   private utils: SwarmChatUtils;
+  private stopSignal: boolean = false;                                      // Signals host() to stop
   
   
   private eventStates: Record<string, boolean> = {                          // Which operation is in progress, if any
@@ -121,7 +121,6 @@ export class SwarmChat {
     }, prettier);
 
     this.utils = new SwarmChatUtils(this.handleError.bind(this), this.logger);              // Initialize chat utils
-    this.usersQueue = new AsyncQueue({ waitable: true, max: 1 }, this.handleError.bind(this), this.logger);
     this.messagesQueue = new AsyncQueue({ waitable: true, max: 4 }, this.handleError.bind(this), this.logger);
     this.reqTimeAvg = new RunningAverage(1000, this.logger);
 
@@ -954,6 +953,7 @@ export class SwarmChat {
     this.startActivityAnalyzes(roomTopic, identity.address as EthAddress, stamp as BatchId);
     
     do {
+      if (this.stopSignal) break;
       await this.utils.sleep(5000);
     } while (true)
   }
@@ -972,5 +972,7 @@ export class SwarmChat {
       clearInterval(this.messageFetchClock);
       this.messageFetchClock = null;
     }
+
+    this.stopSignal = true;
   }
 }
