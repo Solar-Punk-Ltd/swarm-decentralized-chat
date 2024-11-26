@@ -568,10 +568,12 @@ export class SwarmChat {
       this.logger.debug(`New UsersFeedCommit received!  ${objectFromFeed}`)
     
       const validUsers = objectFromFeed.users.filter((user) => this.utils.validateUserObject(user));
+      if (validUsers.length < objectFromFeed.users.length) this.logger.error(`There are ${objectFromFeed.users.length-validUsers.length} invalid user entries in this UsersFeedCommit!`);
 
       let newUsers: UserWithIndex[] = [];
       if (!objectFromFeed.overwrite) {
         // Registration
+        if (!validUsers[0]) throw "The User object for this registration is invalid!";
         newUsers = [...this.users];
         const theNewUser = {
           ...validUsers[0],
@@ -587,19 +589,18 @@ export class SwarmChat {
       }
     
       if (!this.gsocSubscribtion) {
-        console.info("Overwriting users object...")
-        console.log("usersFeedIndex: ", this.usersFeedIndex)
-        console.log("New users length:", newUsers.length);
+        this.logger.debug("Overwriting users object...")
+        this.logger.debug("usersFeedIndex: ", this.usersFeedIndex)
+        this.logger.debug("New users length:", newUsers.length);
         if (newUsers.length > 0) {
-          console.info("Addres at index 0: ", newUsers[0].address);
-          console.info("Username at index 0: ", newUsers[0].username);
+          this.logger.debug("Addres at index 0: ", newUsers[0].address);
+          this.logger.debug("Username at index 0: ", newUsers[0].username);
         }
         this.setUsers(this.utils.removeDuplicateUsers(newUsers));
       }
 
       this.usersFeedIndex++;                                                                       // We assume that download was successful. Next time we are checking next index.
     
-      // update userActivityTable
       this.updateUserActivityAtRegistration();
       this.userFetchIsRunning = false;
       this.emitStateEvent(EVENTS.LOADING_USERS, false);

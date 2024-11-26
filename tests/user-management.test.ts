@@ -768,7 +768,6 @@ describe('writeUsersFeedCommit', () => {
   beforeEach(() => {
     chat = new SwarmChat();
     jest.resetAllMocks();
-    jest.resetAllMocks();
   });
 
   it('should log user was selected message, in info mode', () => {
@@ -857,5 +856,166 @@ describe('writeUsersFeedCommit', () => {
 
     expect(loggerInfoSpy).toHaveBeenLastCalledWith("Writing UsersFeedCommit to index ", 5);
     expect(mockFeedWriter.upload).toHaveBeenCalled();
+  });
+});
+
+
+describe('getNewUsers', () => {
+  let chat: SwarmChat;
+  let mockBee: any;
+  let mockUtils: any;
+  let mockLogger: any;
+
+  beforeEach(() => {
+    jest.resetAllMocks();
+    mockBee = {
+      downloadData: jest.fn()
+    };
+
+    mockUtils = {
+      graffitiFeedReaderFromTopic: jest.fn().mockReturnValue({
+        download: jest.fn()
+      }),
+      validateUserObject: jest.fn().mockReturnValue(true),
+      removeDuplicateUsers: jest.fn((users) => users),
+      isNotFoundError: jest.fn().mockReturnValue(false)
+    };
+
+    mockLogger = {
+      debug: jest.fn(),
+      info: jest.fn(),
+      error: jest.fn()
+    };
+
+    chat = new SwarmChat();
+    
+    (chat as any).bee = mockBee;
+    (chat as any).utils = mockUtils;
+    (chat as any).logger = mockLogger;
+
+  });
+
+  it('should call graffitiFeedReaderFromTopic', async () => {
+    const topic = "example-topic";
+    const mockFeedReader = {
+      download: jest.fn().mockResolvedValue({ reference: 'mock-reference' })
+    };
+    mockUtils.graffitiFeedReaderFromTopic.mockReturnValue(mockFeedReader);
+
+    mockBee.downloadData.mockResolvedValue({
+      json: jest.fn().mockReturnValue({
+        users: [],
+        overwrite: false
+      })
+    });
+
+    await chat.getNewUsers(topic);
+
+    expect(mockUtils.graffitiFeedReaderFromTopic).toHaveBeenCalledWith(mockBee, topic);
+  });
+
+  it('should handle registration of a new user', async () => {
+    const newUser = (await userListWithNUsers(1))[0];
+    const mockFeedEntry = { reference: 'SwarmReference' };
+    const mockEmitStateEvent = jest.spyOn(chat as any, 'emitStateEvent');
+
+    const mockFeedReader = {
+      download: jest.fn().mockResolvedValue(mockFeedEntry)
+    };
+    mockUtils.graffitiFeedReaderFromTopic.mockReturnValue(mockFeedReader);
+
+    mockBee.downloadData.mockResolvedValue({
+      json: jest.fn().mockReturnValue({
+        users: [newUser],
+        overwrite: false
+      })
+    });
+
+    await chat.getNewUsers("test-topic");
+
+    expect(mockEmitStateEvent).toHaveBeenCalledWith(EVENTS.LOADING_USERS, true);
+    expect(mockEmitStateEvent).toHaveBeenCalledWith(EVENTS.USER_REGISTERED, newUser.username);
+    expect(mockEmitStateEvent).toHaveBeenCalledWith(EVENTS.LOADING_USERS, false);
+
+    expect((chat as any).newlyRegisteredUsers).toHaveLength(1);
+    expect((chat as any).newlyRegisteredUsers[0]).toMatchObject({
+      ...newUser,
+      index: -1
+    });
+  });
+
+  it('should handle overwrite scenario', async () => {
+    const users = await userListWithNUsers(2);
+    const mockFeedEntry = { reference: 'SwarmReference' };
+
+    const mockFeedReader = {
+      download: jest.fn().mockResolvedValue(mockFeedEntry)
+    };
+    mockUtils.graffitiFeedReaderFromTopic.mockReturnValue(mockFeedReader);
+
+    mockBee.downloadData.mockResolvedValue({
+      json: jest.fn().mockReturnValue({
+        users,
+        overwrite: true
+      })
+    });
+
+    await chat.getNewUsers("test-topic");
+
+    expect(mockUtils.removeDuplicateUsers).toHaveBeenCalled();
+    expect((chat as any).newlyRegisteredUsers).toHaveLength(0);
+  });
+
+  it('should handle timeout error', async () => {
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+    const timeoutError = new Error('timeout occurred');
+
+    const mockFeedReader = {
+      download: jest.fn().mockRejectedValue(timeoutError)
+    };
+    mockUtils.graffitiFeedReaderFromTopic.mockReturnValue(mockFeedReader);
+
+    await chat.getNewUsers("test-topic");
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith("timeout error");
+    expect(chat['userFetchIsRunning']).toBe(false);
+
+    consoleErrorSpy.mockRestore();
+  });
+
+  it('should handle not found error', async () => {
+    const notFoundError = new Error('Not found');
+    mockUtils.isNotFoundError.mockReturnValue(true);
+
+    const mockFeedReader = {
+      download: jest.fn().mockRejectedValue(notFoundError)
+    };
+    mockUtils.graffitiFeedReaderFromTopic.mockReturnValue(mockFeedReader);
+
+    await chat.getNewUsers("test-topic");
+
+    expect(chat['userFetchIsRunning']).toBe(false);
+    expect(mockUtils.isNotFoundError).toHaveBeenCalledWith(notFoundError);
+  });
+
+  it('should increment usersFeedIndex after successful download', async () => {
+    const initialIndex = chat['usersFeedIndex'];
+    const mockFeedEntry = { reference: 'SwarmReference' };
+
+    const mockFeedReader = {
+      download: jest.fn().mockResolvedValue(mockFeedEntry)
+    };
+    mockUtils.graffitiFeedReaderFromTopic.mockReturnValue(mockFeedReader);
+
+    mockBee.downloadData.mockResolvedValue({
+      json: jest.fn().mockReturnValue({
+        users: [],
+        overwrite: true
+      })
+    });
+
+    await chat.getNewUsers("test-topic");
+
+    expect(chat['usersFeedIndex']).toBe(initialIndex + 1);
   });
 });
