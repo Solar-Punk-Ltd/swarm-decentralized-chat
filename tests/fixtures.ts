@@ -1,6 +1,6 @@
 import { Signature, Wallet } from "ethers";
 import { HOUR, MINUTE, SECOND } from "../src/constants";
-import { EthAddress, User, UserActivity } from "../src/types";
+import { EthAddress, MessageData, User, UserActivity, UserWithIndex } from "../src/types";
 
 
 /**
@@ -61,4 +61,32 @@ export function createMockActivityTable(users: User[], timestamps: number[] = []
     };
     return acc;
   }, {} as UserActivity);
+}
+
+export function someMessages(users: UserWithIndex[], n: number): MessageData[] {
+  const resultArr: MessageData[] = [];
+
+  for (let i = 0; i < n; i++) {
+    const k = i % users.length; // Round-robin selection of users
+    const msg: MessageData = {
+      message: `Message ${i}`,
+      username: users[k].username,
+      address: users[k].address,
+      timestamp: Date.now()
+    };
+
+    resultArr.push(msg);
+  }
+
+  return resultArr;
+}
+
+export function randomizeMessages(messages: MessageData[]): MessageData[] {
+  // Fisher-Yates shuffle
+  for (let i = messages.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [messages[i], messages[j]] = [messages[j], messages[i]];
+  }
+
+  return messages;
 }
