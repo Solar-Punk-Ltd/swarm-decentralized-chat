@@ -822,10 +822,17 @@ describe('writeUsersFeedCommit', () => {
 
   it('should fetch feed index, if usersFeedIndex is falsy', async () => {
     chat.changeLogLevel('info');
+    chat['usersFeedIndex'] = 0;
     const loggerInfoSpy = jest.spyOn((chat as any).logger, 'info');
     const hexStringToNumberSpy = jest.spyOn((chat as any).utils, 'hexStringToNumber');
     const uploadObjectToBeeSpy = jest.spyOn((chat as any).utils, 'uploadObjectToBee');
+    const graffitiFeedWriterFromTopicSpy = jest.spyOn((chat as any).utils, 'graffitiFeedWriterFromTopic');
     uploadObjectToBeeSpy.mockReturnValue("SwarmRef");
+    const mockFeedWriter = {
+      upload: jest.fn().mockResolvedValue(undefined),
+      download: jest.fn().mockResolvedValue({ feedIndexNext: '0x1' }),
+    };
+    graffitiFeedWriterFromTopicSpy.mockReturnValue(mockFeedWriter);
 
     await (chat as any).writeUsersFeedCommit("example-topic", "000" as BatchId, ["0x123" as EthAddress]);
 
