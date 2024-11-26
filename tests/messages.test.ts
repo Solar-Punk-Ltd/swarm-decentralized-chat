@@ -358,3 +358,27 @@ describe('sendMessage', () => {
     expect(chat['ownIndex']).toBe(1);
   });
 });
+
+
+describe('SwarmChatUtils.orderMessages', () => {
+  let chat: SwarmChat;
+
+  beforeEach(() => {
+    chat = new SwarmChat();
+  });
+
+  it('should order messages', async () => {
+    const users = await userListWithNUsers(1);
+    const origMessages = someMessages(users, 5);
+    const randomMessages = randomizeMessages(origMessages);
+    
+    const result = chat['utils'].orderMessages(randomMessages);
+
+    expect(result).toBe(origMessages);
+  });
+
+  it('should give back empty array if input is empty array', async () => {
+    const result = chat['utils'].orderMessages([]);
+    expect(result).toStrictEqual([]);
+  });
+});
