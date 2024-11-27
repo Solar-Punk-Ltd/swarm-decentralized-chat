@@ -198,3 +198,24 @@ describe('incrementHexString', () => {
     expect(chat['utils'].incrementHexString('00')).toBe('0000000000000001');
   });
 });
+
+
+describe('hexStringToNumber', () => {
+  let chat: SwarmChat;
+
+  beforeEach(() => {
+    chat = new SwarmChat();
+  });
+
+  it('should convert lowercase hex string to number', () => {
+    expect(chat['utils'].hexStringToNumber('a5')).toBe(165);
+  });
+
+  it('should convert uppercase hex string to number', () => {
+    expect(chat['utils'].hexStringToNumber('A5')).toBe(165);
+  });
+
+  it('should convert zero hex string to number', () => {
+    expect(chat['utils'].hexStringToNumber('0')).toBe(0);
+  });
+});
