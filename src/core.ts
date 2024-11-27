@@ -743,7 +743,6 @@ export class SwarmChat {
   }
 
   /** Adjusts maxParallel and message fetch interval */
-  //TODO this might be an utils function, but we need to pass a lot of paramerers, and in the other direction as well (return)
   private adjustParameters(topic: string) {
     // Adjust max parallel request count, based on avg request time, which indicates, how much the node is overloaded
     if (this.reqTimeAvg.getAverage() > this.DECREASE_LIMIT) this.messagesQueue.decreaseMax();
