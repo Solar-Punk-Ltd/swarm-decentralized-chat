@@ -302,3 +302,74 @@ describe('EventEmitter.off', () => {
     expect(mockListener).not.toHaveBeenCalled();
   });
 });
+
+
+describe('EventEmitter.cleanAll', () => {
+  let eventEmitter: EventEmitter;
+
+  beforeEach(() => {
+    eventEmitter = new EventEmitter();
+  });
+
+  it('should remove all listeners for all events', () => {
+    const mockListener1 = jest.fn();
+    const mockListener2 = jest.fn();
+    const eventName1 = 'event1';
+    const eventName2 = 'event2';
+
+    eventEmitter.on(eventName1, mockListener1);
+    eventEmitter.on(eventName2, mockListener2);
+
+    eventEmitter.cleanAll();
+
+    eventEmitter.emit(eventName1, 'data1');
+    eventEmitter.emit(eventName2, 'data2');
+
+    expect(mockListener1).not.toHaveBeenCalled();
+    expect(mockListener2).not.toHaveBeenCalled();
+  });
+
+  it('should handle being called when there are no listeners', () => {
+    expect(() => {
+      eventEmitter.cleanAll();
+    }).not.toThrow();
+  });
+
+  it('should ensure no listeners are called after cleaning', () => {
+    const mockListener = jest.fn();
+    const eventName = 'testEvent';
+
+    eventEmitter.on(eventName, mockListener);
+    eventEmitter.cleanAll();
+
+    eventEmitter.emit(eventName, 'testData');
+
+    expect(mockListener).not.toHaveBeenCalled();
+  });
+
+  it('should allow adding new listeners after cleaning', () => {
+    const mockListener = jest.fn();
+    const eventName = 'testEvent';
+
+    eventEmitter.on(eventName, mockListener);
+    eventEmitter.cleanAll();
+    eventEmitter.on(eventName, mockListener);
+
+    eventEmitter.emit(eventName, 'testData');
+
+    expect(mockListener).toHaveBeenCalledWith('testData');
+    expect(mockListener).toHaveBeenCalledTimes(1);
+  });
+
+  it('should clean all listeners for dynamically created event names', () => {
+    const dynamicEventName = `event_${Math.random()}`;
+    const mockListener = jest.fn();
+
+    eventEmitter.on(dynamicEventName, mockListener);
+    eventEmitter.cleanAll();
+
+    eventEmitter.emit(dynamicEventName, 'dynamicData');
+
+    expect(mockListener).not.toHaveBeenCalled();
+  });
+});
