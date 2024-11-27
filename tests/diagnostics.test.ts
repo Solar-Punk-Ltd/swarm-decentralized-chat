@@ -169,3 +169,32 @@ describe('sleep function', () => {
     expect(mockCallback).toHaveBeenCalledTimes(1);
   });
 });
+
+
+describe('incrementHexString', () => {
+  let chat: SwarmChat;
+
+  beforeEach(() => {
+    chat = new SwarmChat();
+  });
+
+  it('should increment a simple hex string by default', () => {
+    expect(chat['utils'].incrementHexString('a')).toBe('000000000000000b');
+    expect(chat['utils'].incrementHexString('f')).toBe('0000000000000010');
+  });
+
+  it('should increment a multi-character hex string', () => {
+    expect(chat['utils'].incrementHexString('ff')).toBe('0000000000000100');
+    expect(chat['utils'].incrementHexString('123')).toBe('0000000000000124');
+  });
+
+  it('should increment by a specified amount', () => {
+    expect(chat['utils'].incrementHexString('a', 2n)).toBe('000000000000000c');
+    expect(chat['utils'].incrementHexString('ff', 3n)).toBe('0000000000000102');
+  });
+
+  it('should increment zero correctly', () => {
+    expect(chat['utils'].incrementHexString('0')).toBe('0000000000000001');
+    expect(chat['utils'].incrementHexString('00')).toBe('0000000000000001');
+  });
+});
