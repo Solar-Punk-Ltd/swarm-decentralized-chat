@@ -219,3 +219,36 @@ describe('hexStringToNumber', () => {
     expect(chat['utils'].hexStringToNumber('0')).toBe(0);
   });
 });
+
+
+describe('isHexString', () => {
+  let chat = new SwarmChat();
+
+  it('should return true for a valid hexadecimal string with matching length', () => {
+    const result = (chat as any).utils.isHexString('a1b2c3', 6);
+    expect(result).toBe(true);
+  });
+
+  it('should return true for a valid hexadecimal string when length is not specified', () => {
+    const result = (chat as any).utils.isHexString('deadbeef');
+    expect(result).toBe(true);
+  });
+
+  it('should return false for a string with non-hexadecimal characters', () => {
+    const result = (chat as any).utils.isHexString('xyz123');
+    expect(result).toBe(false);
+  });
+
+  it('should return false for a valid hexadecimal string with incorrect length', () => {
+    const result = (chat as any).utils.isHexString('a1b2c3', 4);
+    expect(result).toBe(false);
+  });
+
+  it('should return false for non-string inputs', () => {
+    expect((chat as any).utils.isHexString(12345)).toBe(false);
+    expect((chat as any).utils.isHexString(null)).toBe(false);
+    expect((chat as any).utils.isHexString(undefined)).toBe(false);
+    expect((chat as any).utils.isHexString({})).toBe(false);
+    expect((chat as any).utils.isHexString([])).toBe(false);
+  });
+});
