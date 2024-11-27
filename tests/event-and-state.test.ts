@@ -373,3 +373,45 @@ describe('EventEmitter.cleanAll', () => {
     expect(mockListener).not.toHaveBeenCalled();
   });
 });
+
+
+describe('EventEmitter.emit', () => {
+  let eventEmitter: EventEmitter;
+
+  beforeEach(() => {
+    eventEmitter = new EventEmitter();
+  });
+
+  it('should call all listeners registered for the given event', () => {
+    const mockListener1 = jest.fn();
+    const mockListener2 = jest.fn();
+    const eventName = 'testEvent';
+
+    eventEmitter.on(eventName, mockListener1);
+    eventEmitter.on(eventName, mockListener2);
+
+    const eventData = { key: 'value' };
+    eventEmitter.emit(eventName, eventData);
+
+    expect(mockListener1).toHaveBeenCalledWith(eventData);
+    expect(mockListener2).toHaveBeenCalledWith(eventData);
+  });
+
+  it('should not throw if there are no listeners for the given event', () => {
+    expect(() => {
+      eventEmitter.emit('nonExistentEvent', 'testData');
+    }).not.toThrow();
+  });
+
+  it('should not call listeners of other events', () => {
+    const mockListener = jest.fn();
+    const eventName1 = 'event1';
+    const eventName2 = 'event2';
+
+    eventEmitter.on(eventName1, mockListener);
+
+    eventEmitter.emit(eventName2, 'dataForEvent2');
+
+    expect(mockListener).not.toHaveBeenCalled();
+  });
+});
