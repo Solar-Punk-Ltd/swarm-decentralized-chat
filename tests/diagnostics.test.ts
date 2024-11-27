@@ -412,3 +412,73 @@ describe('hexToBytes', () => {
     expect(assertHexStringSpy).toHaveBeenCalledWith(hexString);
   });
 });
+
+
+describe('bytesToHex', () => {
+  let chat = new SwarmChat();
+
+  it('should convert a byte array to a valid hex string', () => {
+    const bytes = new Uint8Array([0x1a, 0x2b, 0x3c, 0x4d]);
+    const expectedHex = '1a2b3c4d';
+
+    const result = (chat as any).utils.bytesToHex(bytes);
+
+    expect(result).toBe(expectedHex);
+  });
+
+  it('should handle an empty byte array', () => {
+    const bytes = new Uint8Array([]);
+    const expectedHex = '';
+
+    const result = (chat as any).utils.bytesToHex(bytes);
+
+    expect(result).toBe(expectedHex);
+  });
+
+  it('should throw an error if the resulting hex string does not match the expected length', () => {
+    const bytes = new Uint8Array([0x1a, 0x2b, 0x3c, 0x4d]);
+    const expectedLength = 6;
+
+    expect(() => {
+      (chat as any).utils.bytesToHex(bytes, expectedLength);
+    }).toThrow(
+      `Resulting HexString does not have expected length ${expectedLength}: 1a2b3c4d`
+    );
+  });
+
+  it('should not throw an error if the resulting hex string matches the expected length', () => {
+    const bytes = new Uint8Array([0x1a, 0x2b, 0x3c, 0x4d]);
+    const expectedLength = 8;
+
+    expect(() => {
+      (chat as any).utils.bytesToHex(bytes, expectedLength);
+    }).not.toThrow();
+  });
+
+  it('should handle a large byte array', () => {
+    const bytes = new Uint8Array(Array(32).fill(0xaa));
+    const expectedHex = 'aa'.repeat(32);
+
+    const result = (chat as any).utils.bytesToHex(bytes);
+
+    expect(result).toBe(expectedHex);
+  });
+
+  it('should convert a byte array with values from 0 to 255', () => {
+    const bytes = new Uint8Array([0x00, 0x7f, 0x80, 0xff]);
+    const expectedHex = '007f80ff';
+
+    const result = (chat as any).utils.bytesToHex(bytes);
+
+    expect(result).toBe(expectedHex);
+  });
+
+  it('should pad single-digit hex values with a leading zero', () => {
+    const bytes = new Uint8Array([0x1, 0xa]);
+    const expectedHex = '010a';
+
+    const result = (chat as any).utils.bytesToHex(bytes);
+
+    expect(result).toBe(expectedHex);
+  });
+});
