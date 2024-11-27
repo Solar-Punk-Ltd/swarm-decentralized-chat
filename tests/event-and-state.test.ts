@@ -188,3 +188,117 @@ describe('EventEmitter.on', () => {
     expect(mockListener).toHaveBeenCalledWith('dynamicData');
   });
 });
+
+
+describe('EventEmitter.off', () => {
+  let eventEmitter: EventEmitter;
+
+  beforeEach(() => {
+    eventEmitter = new EventEmitter();
+  });
+
+  it('should remove a listener for a given event', () => {
+    const mockListener = jest.fn();
+    const eventName = 'testEvent';
+
+    eventEmitter.on(eventName, mockListener);
+    eventEmitter.off(eventName, mockListener);
+
+    eventEmitter.emit(eventName, 'testData');
+    expect(mockListener).not.toHaveBeenCalled();
+  });
+
+  it('should not throw an error if removing a listener that does not exist', () => {
+    const mockListener = jest.fn();
+    const eventName = 'testEvent';
+
+    expect(() => {
+      eventEmitter.off(eventName, mockListener);
+    }).not.toThrow();
+  });
+
+  it('should not throw an error when removing a listener from a non-existent event', () => {
+    const mockListener = jest.fn();
+    const eventName = 'nonExistentEvent';
+
+    expect(() => {
+      eventEmitter.off(eventName, mockListener);
+    }).not.toThrow();
+  });
+
+  it('should not affect other listeners for the same event', () => {
+    const mockListener1 = jest.fn();
+    const mockListener2 = jest.fn();
+    const eventName = 'testEvent';
+
+    eventEmitter.on(eventName, mockListener1);
+    eventEmitter.on(eventName, mockListener2);
+
+    eventEmitter.off(eventName, mockListener1);
+
+    eventEmitter.emit(eventName, 'testData');
+
+    expect(mockListener1).not.toHaveBeenCalled();
+    expect(mockListener2).toHaveBeenCalledWith('testData');
+    expect(mockListener2).toHaveBeenCalledTimes(1);
+  });
+
+  it('should handle removing a listener that was added multiple times', () => {
+    const mockListener = jest.fn();
+    const eventName = 'testEvent';
+
+    eventEmitter.on(eventName, mockListener);
+    eventEmitter.on(eventName, mockListener);
+
+    eventEmitter.off(eventName, mockListener);
+
+    eventEmitter.emit(eventName, 'testData');
+
+    expect(mockListener).toHaveBeenCalledTimes(1);
+    expect(mockListener).toHaveBeenCalledWith('testData');
+  });
+
+  it('should not affect listeners for other events', () => {
+    const mockListener1 = jest.fn();
+    const mockListener2 = jest.fn();
+
+    eventEmitter.on('event1', mockListener1);
+    eventEmitter.on('event2', mockListener2);
+
+    eventEmitter.off('event1', mockListener1);
+
+    eventEmitter.emit('event1', 'data1');
+    eventEmitter.emit('event2', 'data2');
+
+    expect(mockListener1).not.toHaveBeenCalled();
+    expect(mockListener2).toHaveBeenCalledWith('data2');
+  });
+
+  it('should remove only the specified listener, leaving others intact', () => {
+    const mockListener1 = jest.fn();
+    const mockListener2 = jest.fn();
+    const eventName = 'testEvent';
+
+    eventEmitter.on(eventName, mockListener1);
+    eventEmitter.on(eventName, mockListener2);
+
+    eventEmitter.off(eventName, mockListener1);
+
+    eventEmitter.emit(eventName, 'testData');
+
+    expect(mockListener1).not.toHaveBeenCalled();
+    expect(mockListener2).toHaveBeenCalledWith('testData');
+  });
+
+  it('should handle dynamically generated event names', () => {
+    const mockListener = jest.fn();
+    const dynamicEventName = `event_${Math.random()}`;
+
+    eventEmitter.on(dynamicEventName, mockListener);
+    eventEmitter.off(dynamicEventName, mockListener);
+
+    eventEmitter.emit(dynamicEventName, 'dynamicData');
+
+    expect(mockListener).not.toHaveBeenCalled();
+  });
+});
