@@ -362,3 +362,53 @@ describe('assertHexString', () => {
     }).toThrow(/customName not valid non prefixed hex string/);
   });
 });
+
+
+describe('hexToBytes', () => {
+  let chat = new SwarmChat();
+
+  it('should convert a valid hexadecimal string to a byte array', () => {
+    const hexString = '1a2b3c4d';
+    const expectedBytes = new Uint8Array([0x1a, 0x2b, 0x3c, 0x4d]);
+
+    const result = (chat as any).utils.hexToBytes(hexString);
+
+    expect(result).toEqual(expectedBytes);
+  });
+
+  it('should throw an error for a string with invalid characters', () => {
+    const invalidHex = '1a2z3c';
+
+    expect(() => {
+      (chat as any).utils.hexToBytes(invalidHex);
+    }).toThrow(/not valid hex string/);
+  });
+
+  it('should throw an error for a string with 0x prefix', () => {
+    const prefixedHex = '0x1a2b3c';
+
+    expect(() => {
+      (chat as any).utils.hexToBytes(prefixedHex);
+    }).toThrow(/not valid non prefixed hex string/);
+  });
+
+  it('should handle a large valid hexadecimal string', () => {
+    const hexString = 'a'.repeat(64); // 32 bytes
+    const expectedBytes = new Uint8Array(
+      Array(32).fill(0xaa) // 'aa' in hex is 170 in decimal
+    );
+
+    const result = (chat as any).utils.hexToBytes(hexString);
+
+    expect(result).toEqual(expectedBytes);
+  });
+
+  it('should call assertHexString to validate input', () => {
+    const hexString = '1a2b3c4d';
+    const assertHexStringSpy = jest.spyOn((chat as any).utils, 'assertHexString');
+
+    (chat as any).utils.hexToBytes(hexString);
+
+    expect(assertHexStringSpy).toHaveBeenCalledWith(hexString);
+  });
+});
