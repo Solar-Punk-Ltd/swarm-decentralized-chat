@@ -1,4 +1,5 @@
 import { SwarmChat } from "../src/core";
+import { userListWithNUsers } from "./fixtures";
 
 
 describe('adjustParameters', () => {
@@ -61,5 +62,46 @@ describe('adjustParameters', () => {
     expect(clearIntervalSpy).toHaveBeenCalled();
     expect(setIntervalSpy).toHaveBeenCalled();
     expect(loggerInfoSpy).toHaveBeenCalledWith(expect.stringContaining(`Decreased message fetch interval to ${chat['mInterval'] - chat['F_STEP']} ms`));
+  });
+});
+
+
+describe('getDiagnostics', () => {
+  let chat: SwarmChat;
+  
+  beforeEach(() => {
+    chat = new SwarmChat();
+  });
+  
+  it('should return a diagnostic object with all expected properties', () => {
+    const diagnostics = chat.getDiagnostics();
+  
+    expect(diagnostics).toHaveProperty('requestTimeAvg');
+    expect(diagnostics).toHaveProperty('users');
+    expect(diagnostics).toHaveProperty('currentMessageFetchInterval');
+    expect(diagnostics).toHaveProperty('maxParallel');
+    expect(diagnostics).toHaveProperty('userActivityTable');
+    expect(diagnostics).toHaveProperty('newlyResigeredUsers');
+    expect(diagnostics).toHaveProperty('requestCount');
+    expect(diagnostics).toHaveProperty('userFetchClockExists');
+    expect(diagnostics).toHaveProperty('messageFetchClockExists');
+    expect(diagnostics).toHaveProperty('removeInactiveUsersInterval');
+  });
+  
+  it('should correctly map internal state to diagnostic properties', async () => {
+    const users = await userListWithNUsers(3); 
+    chat['users'] = users;
+    chat['mInterval'] = 500;
+    chat['messagesQueue'].getMaxParallel = jest.fn().mockReturnValue(5);
+    chat['userFetchClock'] = null;
+    chat['messageFetchClock'] = {} as NodeJS.Timeout;
+  
+    const diagnostics = chat.getDiagnostics();
+  
+    expect(diagnostics.users).toBe(users);
+    expect(diagnostics.currentMessageFetchInterval).toBe(500);
+    expect(diagnostics.maxParallel).toBe(5);
+    expect(diagnostics.userFetchClockExists).toBe(false);
+    expect(diagnostics.messageFetchClockExists).toBe(true);
   });
 });
