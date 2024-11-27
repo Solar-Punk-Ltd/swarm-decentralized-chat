@@ -326,13 +326,15 @@ export class SwarmChatUtils {
     return sortedActiveUsers.slice(0, limit);
   }
 
-  /** GSOC UTILS */
+  /// GSOC RELATED UTILS
   private isHexString<Length extends number = number>(s: unknown, len?: number): s is HexString<Length> {
     return typeof s === 'string' && /^[0-9a-f]+$/i.test(s) && (!len || s.length === len)
   }
+
   private isPrefixedHexString(s: unknown): s is PrefixedHexString {
     return typeof s === 'string' && /^0x[0-9a-f]+$/i.test(s)
   }
+
   private assertHexString<Length extends number = number>(
     s: unknown,
     len?: number,
@@ -348,6 +350,7 @@ export class SwarmChatUtils {
       throw new TypeError(`${name} not valid hex string${lengthMsg}: ${s}`)
     }
   }
+
   private hexToBytes<Length extends number, LengthHex extends number = number>(
     hex: HexString<LengthHex>,
   ): Bytes<Length> {
@@ -361,6 +364,7 @@ export class SwarmChatUtils {
   
     return bytes as Bytes<Length>
   }
+  
   private bytesToHex<Length extends number = number>(bytes: Uint8Array, len?: Length): HexString<Length> {
     const hexByte = (n: number) => n.toString(16).padStart(2, '0')
     const hex = Array.from(bytes, hexByte).join('') as HexString<Length>

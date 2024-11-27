@@ -290,3 +290,75 @@ describe('isPrefixedHexString', () => {
     expect(result).toBe(false);
   });
 });
+
+
+describe('assertHexString', () => {
+  let chat = new SwarmChat();
+
+  it('should pass for a valid hexadecimal string with the correct length', () => {
+    expect(() => {
+      (chat as any).utils.assertHexString('1a2b3c', 6);
+    }).not.toThrow();
+  });
+
+  it('should pass for a valid hexadecimal string without specifying length', () => {
+    expect(() => {
+      (chat as any).utils.assertHexString('1a2b3c');
+    }).not.toThrow();
+  });
+
+  it('should throw an error for a string with 0x prefix', () => {
+    expect(() => {
+      (chat as any).utils.assertHexString('0x1a2b3c');
+    }).toThrow(TypeError);
+    expect(() => {
+      (chat as any).utils.assertHexString('0x1a2b3c');
+    }).toThrow(/not valid non prefixed hex string \(has 0x prefix\)/);
+  });
+
+  it('should throw an error for a string with invalid characters', () => {
+    expect(() => {
+      (chat as any).utils.assertHexString('1a2z3c');
+    }).toThrow(TypeError);
+    expect(() => {
+      (chat as any).utils.assertHexString('1a2z3c');
+    }).toThrow(/not valid hex string/);
+  });
+
+  it('should throw an error for a string of incorrect length', () => {
+    expect(() => {
+      (chat as any).utils.assertHexString('1a2b3c', 4);
+    }).toThrow(TypeError);
+    expect(() => {
+      (chat as any).utils.assertHexString('1a2b3c', 4);
+    }).toThrow(/not valid hex string of length 4/);
+  });
+
+  it('should throw an error for non-string inputs', () => {
+    expect(() => {
+      (chat as any).utils.assertHexString(12345);
+    }).toThrow(TypeError);
+    expect(() => {
+      (chat as any).utils.assertHexString(null);
+    }).toThrow(TypeError);
+    expect(() => {
+      (chat as any).utils.assertHexString(undefined);
+    }).toThrow(TypeError);
+    expect(() => {
+      (chat as any).utils.assertHexString({});
+    }).toThrow(TypeError);
+    expect(() => {
+      (chat as any).utils.assertHexString([]);
+    }).toThrow(TypeError);
+  });
+
+  it('should include the custom name in the error message', () => {
+    expect(() => {
+      (chat as any).utils.assertHexString('1a2z3c', undefined, 'customName');
+    }).toThrow(/customName not valid hex string/);
+
+    expect(() => {
+      (chat as any).utils.assertHexString('0x1a2b3c', undefined, 'customName');
+    }).toThrow(/customName not valid non prefixed hex string/);
+  });
+});
