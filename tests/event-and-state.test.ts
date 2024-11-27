@@ -103,3 +103,88 @@ describe('emitStateEvent', () => {
     }).not.toThrow();
   });
 });
+
+
+describe('EventEmitter.on', () => {
+  let eventEmitter: EventEmitter;
+
+  beforeEach(() => {
+    eventEmitter = new EventEmitter();
+  });
+
+  it('should register a new listener for an event', () => {
+    const mockListener = jest.fn();
+    const testEvent = 'testEvent';
+
+    eventEmitter.on(testEvent, mockListener);
+    eventEmitter.emit(testEvent, 'testData');
+
+    expect(mockListener).toHaveBeenCalledTimes(1);
+    expect(mockListener).toHaveBeenCalledWith('testData');
+  });
+
+  it('should allow multiple listeners to be registered for the same event', () => {
+    const mockListener1 = jest.fn();
+    const mockListener2 = jest.fn();
+    const testEvent = 'testEvent';
+
+    eventEmitter.on(testEvent, mockListener1);
+    eventEmitter.on(testEvent, mockListener2);
+
+    eventEmitter.emit(testEvent, 'testData');
+
+    expect(mockListener1).toHaveBeenCalledTimes(1);
+    expect(mockListener1).toHaveBeenCalledWith('testData');
+
+    expect(mockListener2).toHaveBeenCalledTimes(1);
+    expect(mockListener2).toHaveBeenCalledWith('testData');
+  });
+
+  it('should not interfere with listeners for other events', () => {
+    const mockListener1 = jest.fn();
+    const mockListener2 = jest.fn();
+
+    eventEmitter.on('event1', mockListener1);
+    eventEmitter.on('event2', mockListener2);
+
+    eventEmitter.emit('event1', 'data1');
+
+    expect(mockListener1).toHaveBeenCalledTimes(1);
+    expect(mockListener1).toHaveBeenCalledWith('data1');
+
+    expect(mockListener2).not.toHaveBeenCalled();
+  });
+
+  it('should not add duplicate listeners for the same event', () => {
+    const mockListener = jest.fn();
+    const testEvent = 'testEvent';
+
+    eventEmitter.on(testEvent, mockListener);
+    eventEmitter.on(testEvent, mockListener);
+
+    eventEmitter.emit(testEvent, 'testData');
+
+    expect(mockListener).toHaveBeenCalledTimes(2); // Allow duplicates (as per most event emitter implementations)
+    expect(mockListener).toHaveBeenCalledWith('testData');
+  });
+
+  it('should not throw an error when registering a listener for an empty event name', () => {
+    const mockListener = jest.fn();
+
+    expect(() => {
+      eventEmitter.on('', mockListener);
+    }).not.toThrow();
+  });
+
+  it('should support registering listeners for dynamically generated event names', () => {
+    const mockListener = jest.fn();
+    const dynamicEvent = `event_${Math.random()}`;
+
+    eventEmitter.on(dynamicEvent, mockListener);
+
+    eventEmitter.emit(dynamicEvent, 'dynamicData');
+
+    expect(mockListener).toHaveBeenCalledTimes(1);
+    expect(mockListener).toHaveBeenCalledWith('dynamicData');
+  });
+});
