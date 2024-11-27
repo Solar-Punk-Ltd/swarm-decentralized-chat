@@ -252,3 +252,41 @@ describe('isHexString', () => {
     expect((chat as any).utils.isHexString([])).toBe(false);
   });
 });
+
+
+describe('isPrefixedHexString', () => {
+  let chat = new SwarmChat();
+
+  it('should return true for a valid hexadecimal string with 0x prefix', () => {
+    const result = (chat as any).utils.isPrefixedHexString('0x1a2b3c');
+    expect(result).toBe(true);
+  });
+
+  it('should return false for a valid hexadecimal string without 0x prefix', () => {
+    const result = (chat as any).utils.isPrefixedHexString('1a2b3c');
+    expect(result).toBe(false);
+  });
+
+  it('should return false for a string with invalid characters but with 0x prefix', () => {
+    const result = (chat as any).utils.isPrefixedHexString('0x123zxy');
+    expect(result).toBe(false);
+  });
+
+  it('should return false for non-string inputs', () => {
+    expect((chat as any).utils.isPrefixedHexString(12345)).toBe(false);
+    expect((chat as any).utils.isPrefixedHexString(null)).toBe(false);
+    expect((chat as any).utils.isPrefixedHexString(undefined)).toBe(false);
+    expect((chat as any).utils.isPrefixedHexString({})).toBe(false);
+    expect((chat as any).utils.isPrefixedHexString([])).toBe(false);
+  });
+
+  it('should return false for an empty string', () => {
+    const result = (chat as any).utils.isPrefixedHexString('');
+    expect(result).toBe(false);
+  });
+
+  it('should return false for improperly prefixed string (e.g., "0x" only)', () => {
+    const result = (chat as any).utils.isPrefixedHexString('0x');
+    expect(result).toBe(false);
+  });
+});
