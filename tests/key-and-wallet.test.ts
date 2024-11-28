@@ -1,5 +1,6 @@
 import { Utils } from '@ethersphere/bee-js';
 import { SwarmChat } from "../src/core";
+import { utils, Wallet } from 'ethers';
 
 
 describe('getConsensualPrivateKey', () => {
@@ -24,5 +25,41 @@ describe('getConsensualPrivateKey', () => {
 
     isHexStringSpy.mockRestore();
     hexToBytesSpy.mockRestore();
+  });
+});
+
+
+// Mock ethers utilities
+jest.mock('ethers', () => ({
+  ...jest.requireActual('ethers'),
+  utils: {
+    ...jest.requireActual('ethers').utils,
+    hexlify: jest.fn()
+  },
+  Wallet: jest.fn()
+}));
+
+describe('getGraffitiWallet', () => {
+  let swarmChat: SwarmChat;
+
+  beforeEach(() => {
+    swarmChat = new SwarmChat();
+    
+    jest.clearAllMocks();
+  });
+
+  it('should create a wallet with hexlified private key', () => {
+    const consensualPrivateKey = new Uint8Array([1, 2, 3, 4]);
+    const hexlifiedPrivateKey = '0x01020304';
+    const mockWallet = {} as Wallet;
+
+    (utils.hexlify as jest.Mock).mockReturnValue(hexlifiedPrivateKey);
+    (Wallet as unknown as jest.Mock).mockReturnValue(mockWallet);
+
+    const result = (swarmChat as any).utils.getGraffitiWallet(consensualPrivateKey);
+
+    expect(utils.hexlify).toHaveBeenCalledWith(consensualPrivateKey);
+    expect(Wallet).toHaveBeenCalledWith(hexlifiedPrivateKey);
+    expect(result).toBe(mockWallet);
   });
 });
