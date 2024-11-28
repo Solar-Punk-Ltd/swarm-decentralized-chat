@@ -336,3 +336,29 @@ describe('AsyncQueue.increaseMax', () => {
     expect(asyncQueue.getMaxParallel()).toBe(6);
   });
 });
+
+
+describe('AsyncQueue.decreaseMax', () => {
+  let asyncQueue: AsyncQueue;
+  let mockHandleError: jest.Mock;
+
+  beforeEach(() => {
+    mockHandleError = jest.fn();
+    const logger = pino({ level: 'silent' });
+    asyncQueue = new AsyncQueue({ max: 5 }, mockHandleError, logger);
+  });
+
+  it('should decrease maxParallel by 1 if greater than 1', () => {
+    asyncQueue.decreaseMax();
+    expect(asyncQueue.getMaxParallel()).toBe(4);
+
+    asyncQueue.decreaseMax();
+    expect(asyncQueue.getMaxParallel()).toBe(3);
+  });
+
+  it('should not decrease maxParallel below 1', () => {
+    asyncQueue = new AsyncQueue({ max: 1 }, mockHandleError, pino({ level: 'silent' }));
+    asyncQueue.decreaseMax();
+    expect(asyncQueue.getMaxParallel()).toBe(1);
+  });
+});
