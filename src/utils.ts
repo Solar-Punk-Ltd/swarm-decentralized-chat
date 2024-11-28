@@ -12,6 +12,14 @@ export class SwarmChatUtils {
   private logger: pino.Logger;
 
   constructor(handleError: (errObject: ErrorObject) => void, logger: pino.Logger) {
+    if (typeof handleError !== 'function') {
+      throw new TypeError('handleError must be a function');
+    }
+  
+    if (!logger || typeof logger.error !== 'function') {
+      throw new TypeError('A valid logger with an error method is required');
+    }
+    
     this.handleError = handleError;
     this.logger = logger;
   }
