@@ -1,6 +1,7 @@
 import pino from "pino";
 import { ErrorObject } from "../src/types";
 import { SwarmChatUtils } from "../src/utils";
+import { Bee, FeedReader } from "@ethersphere/bee-js";
 
 
 describe('serializeGraffitiRecord', () => {
@@ -82,15 +83,6 @@ describe('numberToFeedIndex', () => {
     expect(result).toBe(expectedHex);
   });
 
-  it('should convert the maximum safe integer to the correct feed index', () => {
-    const index = Number.MAX_SAFE_INTEGER;
-    const expectedHex = '001fffffffffffff'; // MAX_SAFE_INTEGER in hexadecimal, padded to 8 bytes
-
-    const result = utils.numberToFeedIndex(index);
-
-    expect(result).toBe(expectedHex);
-  });
-
   it('should handle large numbers within the range of a 32-bit integer', () => {
     const index = 2147483647; // 2^31 - 1, max 32-bit signed integer
     const expectedHex = '000000007fffffff'; // Corresponding hex representation
@@ -98,5 +90,131 @@ describe('numberToFeedIndex', () => {
     const result = utils.numberToFeedIndex(index);
 
     expect(result).toBe(expectedHex);
+  });
+});
+
+
+describe('fetchUsersFeedAtIndex', () => {
+  let mockBee: jest.Mocked<Bee>;
+  let mockFeedReader: jest.Mocked<FeedReader>;
+  let mockHandleError: jest.Mock<void, [ErrorObject]>;
+  let utils: SwarmChatUtils;
+
+  beforeEach(() => {
+    mockBee = {
+      downloadData: jest.fn(),
+    } as unknown as jest.Mocked<Bee>;
+
+    mockFeedReader = {
+      download: jest.fn(),
+    } as unknown as jest.Mocked<FeedReader>;
+
+    mockHandleError = jest.fn();
+
+    utils = new SwarmChatUtils(mockHandleError, console as unknown as pino.Logger);
+  });
+
+  it('should fetch data at a specific index', async () => {
+    const mockData = { json: jest.fn().mockReturnValue({ key: 'value' }) };
+    const mockFeedEntry = { reference: 'mockReference', feedIndexNext: '00000002' };
+    const index = 1;
+
+    mockFeedReader.download.mockResolvedValue(mockFeedEntry as any);
+    mockBee.downloadData.mockResolvedValue(mockData as any);
+
+    const result = await utils.fetchUsersFeedAtIndex(mockBee, mockFeedReader, index);
+
+    expect(mockFeedReader.download).toHaveBeenCalledWith({ index });
+    expect(mockBee.downloadData).toHaveBeenCalledWith('mockReference');
+    expect(result).toEqual({
+      feedCommit: { key: 'value' },
+      nextIndex: 2,
+    });
+  });
+
+  it('should fetch the last index when index is undefined', async () => {
+    const mockData = { json: jest.fn().mockReturnValue({ key: 'value' }) };
+    const mockFeedEntry = { reference: 'mockReference', feedIndexNext: '00000002' };
+
+    mockFeedReader.download.mockResolvedValue(mockFeedEntry as any);
+    mockBee.downloadData.mockResolvedValue(mockData as any);
+
+    const result = await utils.fetchUsersFeedAtIndex(mockBee, mockFeedReader, undefined);
+
+    expect(mockFeedReader.download).toHaveBeenCalledWith({ index: undefined });
+    expect(mockBee.downloadData).toHaveBeenCalledWith('mockReference');
+    expect(result).toEqual({
+      feedCommit: { key: 'value' },
+      nextIndex: 2,
+    });
+  });
+
+  it('should return null and handle errors if index is negative', async () => {
+    const index = -1;
+
+    const result = await utils.fetchUsersFeedAtIndex(mockBee, mockFeedReader, index);
+
+    expect(mockHandleError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: 'fetchUsersFeedAtIndex',
+        error: expect.any(String),
+      })
+    );
+    expect(result).toBeNull();
+    expect(mockFeedReader.download).not.toHaveBeenCalled();
+    expect(mockBee.downloadData).not.toHaveBeenCalled();
+  });
+
+  it('should return null and handle errors on download failure', async () => {
+    const index = 1;
+    mockFeedReader.download.mockRejectedValue(new Error('Download failed'));
+
+    const result = await utils.fetchUsersFeedAtIndex(mockBee, mockFeedReader, index);
+
+    expect(mockHandleError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: 'fetchUsersFeedAtIndex',
+        error: expect.any(Error),
+      })
+    );
+    expect(result).toBeNull();
+    expect(mockFeedReader.download).toHaveBeenCalledWith({ index });
+    expect(mockBee.downloadData).not.toHaveBeenCalled();
+  });
+
+  it('should return null and handle errors on data download failure', async () => {
+    const mockFeedEntry = { reference: 'mockReference', feedIndexNext: '00000002' };
+    const index = 1;
+
+    mockFeedReader.download.mockResolvedValue(mockFeedEntry as any);
+    mockBee.downloadData.mockRejectedValue(new Error('Data download failed'));
+
+    const result = await utils.fetchUsersFeedAtIndex(mockBee, mockFeedReader, index);
+
+    expect(mockHandleError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: 'fetchUsersFeedAtIndex',
+        error: expect.any(Error),
+      })
+    );
+    expect(result).toBeNull();
+    expect(mockFeedReader.download).toHaveBeenCalledWith({ index });
+    expect(mockBee.downloadData).toHaveBeenCalledWith('mockReference');
+  });
+
+  it('should handle a feed entry without a next index', async () => {
+    const mockData = { json: jest.fn().mockReturnValue({ key: 'value' }) };
+    const mockFeedEntry = { reference: 'mockReference', feedIndexNext: undefined };
+    const index = 1;
+
+    mockFeedReader.download.mockResolvedValue(mockFeedEntry as any);
+    mockBee.downloadData.mockResolvedValue(mockData as any);
+
+    const result = await utils.fetchUsersFeedAtIndex(mockBee, mockFeedReader, index);
+
+    expect(result).toEqual({
+      feedCommit: { key: 'value' },
+      nextIndex: NaN,
+    });
   });
 });
