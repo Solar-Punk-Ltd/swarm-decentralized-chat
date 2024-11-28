@@ -10,10 +10,8 @@ describe('SwarmChatUtils.constructor', () => {
   let utils: SwarmChatUtils;
 
   beforeEach(() => {
-    // Create a mock logger
     logger = pino({ level: 'silent' });
 
-    // Create a mock error handler function
     mockHandleError = jest.fn((errObject: ErrorObject) => {
       logger.error(`Error in ${errObject.context}: ${errObject.error.message}`);
     });
