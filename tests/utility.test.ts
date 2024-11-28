@@ -1,5 +1,4 @@
 import pino from "pino";
-import { EVENTS } from "../src/constants";
 import { ErrorObject } from "../src/types";
 import { SwarmChatUtils } from "../src/utils";
 
