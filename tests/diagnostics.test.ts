@@ -1,4 +1,6 @@
+import pino from "pino";
 import { SwarmChat } from "../src/core";
+import { RunningAverage } from "../src/utils";
 import { userListWithNUsers } from "./fixtures";
 
 
@@ -480,5 +482,83 @@ describe('bytesToHex', () => {
     const result = (chat as any).utils.bytesToHex(bytes);
 
     expect(result).toBe(expectedHex);
+  });
+});
+
+
+describe('RunningAverage.addValue', () => {
+  let logger: pino.Logger;
+
+  beforeEach(() => {
+    logger = pino({ level: 'silent' });
+  });
+
+  it('should add new value to the array', () => {
+    let avg = new RunningAverage(50, logger);
+
+    expect(avg['values'].length).toBe(0);
+    avg.addValue(3);
+    expect(avg['values'].length).toBe(1);
+    expect(avg['values'][0]).toBe(3);
+  });
+
+  it('should maintain the maximum size of the array', () => {
+    const maxSize = 3;
+    let avg = new RunningAverage(maxSize, logger);
+
+    avg.addValue(1);
+    avg.addValue(2);
+    avg.addValue(3);
+    avg.addValue(4);
+
+    expect(avg['values'].length).toBe(maxSize);
+    expect(avg['values']).toEqual([2, 3, 4]);
+  });
+
+  it('should correctly update the sum when adding values', () => {
+    let avg = new RunningAverage(50, logger);
+
+    avg.addValue(10);
+    expect(avg['sum']).toBe(10);
+
+    avg.addValue(20);
+    expect(avg['sum']).toBe(30);
+  });
+
+  it('should correctly update the sum when removing oldest value', () => {
+    const maxSize = 3;
+    let avg = new RunningAverage(maxSize, logger);
+
+    avg.addValue(10);
+    avg.addValue(20);
+    avg.addValue(30);
+    avg.addValue(40);
+
+    expect(avg['values']).toEqual([20, 30, 40]);
+    expect(avg['sum']).toBe(90);
+  });
+
+  it('should handle adding multiple values up to max size', () => {
+    const maxSize = 5;
+    let avg = new RunningAverage(maxSize, logger);
+
+    for (let i = 1; i <= 5; i++) {
+      avg.addValue(i * 10);
+    }
+
+    expect(avg['values'].length).toBe(maxSize);
+    expect(avg['values']).toEqual([10, 20, 30, 40, 50]);
+    expect(avg['sum']).toBe(150);
+  });
+
+  it('should call logger.info with the current average', () => {
+    const loggerInfoSpy = jest.spyOn(logger, 'info');
+    
+    let avg = new RunningAverage(50, logger);
+    avg.addValue(100);
+
+    expect(loggerInfoSpy).toHaveBeenCalledWith(`Current average:  100`);
+
+    loggerInfoSpy.mockRestore();
   });
 });
