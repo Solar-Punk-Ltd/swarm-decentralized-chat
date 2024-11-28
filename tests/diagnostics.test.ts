@@ -562,3 +562,78 @@ describe('RunningAverage.addValue', () => {
     loggerInfoSpy.mockRestore();
   });
 });
+
+
+describe('RunningAverage.getAverage', () => {
+  let logger: pino.Logger;
+
+  beforeEach(() => {
+    logger = pino({ level: 'silent' });
+  });
+
+  it('should return 200 when no values have been added', () => {
+    const avg = new RunningAverage(50, logger);
+    expect(avg.getAverage()).toBe(200);
+  });
+
+  it('should calculate the average of a single value', () => {
+    const avg = new RunningAverage(50, logger);
+    avg.addValue(100);
+    expect(avg.getAverage()).toBe(100);
+  });
+
+  it('should calculate the average of multiple values', () => {
+    const avg = new RunningAverage(50, logger);
+    avg.addValue(10);
+    avg.addValue(20);
+    avg.addValue(30);
+    expect(avg.getAverage()).toBe(20);
+  });
+
+  it('should maintain correct average when max size is reached', () => {
+    const maxSize = 3;
+    const avg = new RunningAverage(maxSize, logger);
+    
+    avg.addValue(10);
+    avg.addValue(20);
+    avg.addValue(30);
+    avg.addValue(40);
+
+    // Expected average of [20, 30, 40]
+    expect(avg.getAverage()).toBe(30);
+  });
+
+  it('should handle adding values beyond the max size', () => {
+    const maxSize = 3;
+    const avg = new RunningAverage(maxSize, logger);
+    
+    avg.addValue(10);
+    avg.addValue(20);
+    avg.addValue(30);
+    avg.addValue(40);
+    avg.addValue(50);
+    avg.addValue(60);
+
+    // Expected average of the last 3 values
+    expect(avg.getAverage()).toBe(50);
+  });
+
+  it('should work with decimal values', () => {
+    const avg = new RunningAverage(50, logger);
+    avg.addValue(10.5);
+    avg.addValue(20.5);
+    avg.addValue(30.5);
+    expect(avg.getAverage()).toBe(20.5);
+  });
+
+  it('should handle large numbers of values within max size', () => {
+    const maxSize = 10;
+    const avg = new RunningAverage(maxSize, logger);
+    
+    for (let i = 1; i <= 10; i++) {
+      avg.addValue(i * 10);
+    }
+
+    expect(avg.getAverage()).toBe(55);
+  });
+});
