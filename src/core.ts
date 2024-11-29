@@ -51,7 +51,6 @@ export class SwarmChat {
   private emitter = new EventEmitter();
   private messages: MessageData[] = [];
   private reqTimeAvg;
-  private usersQueue: AsyncQueue;
   private messagesQueue: AsyncQueue;
   private users: UserWithIndex[] = [];
   private usersLoading = false;
@@ -68,11 +67,12 @@ export class SwarmChat {
   private removeIdleIsRunning = false;                                      // Avoid race conditions
   private userFetchIsRunning = false;                                       // Wait for the previous getNewUsers to finish
   private userActivityTable: UserActivity = {};                             // Used to remove inactive users
-  private newlyRegisteredUsers: UserWithIndex[] = [];                        // keep track of fresh users
+  private newlyRegisteredUsers: UserWithIndex[] = [];                       // keep track of fresh users
   private reqCount = 0;                                                     // Diagnostics only
   //private prettyStream = null;
   private logger = pino(/*this.prettyStream*/);                                 // Logger. Levels: "fatal" | "error" | "warn" | "info" | "debug" | "trace" | "silent"
   private utils: SwarmChatUtils;
+  private stopSignal: boolean = false;                                      // Signals host() to stop
   
   
   private eventStates: Record<string, boolean> = {                          // Which operation is in progress, if any
@@ -121,7 +121,6 @@ export class SwarmChat {
     }, prettier);
 
     this.utils = new SwarmChatUtils(this.handleError.bind(this), this.logger);              // Initialize chat utils
-    this.usersQueue = new AsyncQueue({ waitable: true, max: 1 }, this.handleError.bind(this), this.logger);
     this.messagesQueue = new AsyncQueue({ waitable: true, max: 4 }, this.handleError.bind(this), this.logger);
     this.reqTimeAvg = new RunningAverage(1000, this.logger);
 
@@ -514,7 +513,7 @@ export class SwarmChat {
       const feedWriter = this.utils.graffitiFeedWriterFromTopic(this.bee, topic, { timeout: this.USERS_FEED_TIMEOUT });
 
       if (!this.usersFeedIndex) {
-        console.info("Fetching current index...")
+        this.logger.info("Fetching current index...")
         try {
           const currentIndex = await feedWriter.download();
           this.usersFeedIndex = this.utils.hexStringToNumber(currentIndex.feedIndexNext);
@@ -524,12 +523,7 @@ export class SwarmChat {
         }
       }
       
-      console.info("Writing UsersFeedCommit to index ", this.usersFeedIndex)
-      let usersForLog = "";   //TODO remove after debugging
-      usersToWrite.map((uObj) => { //TODO remove after debugging
-        usersForLog = usersForLog.concat(` ${uObj.username}(${uObj.address})`)
-      });
-      console.info(`These users were written (${usersToWrite.length}):  ${usersForLog}\n`);
+      this.logger.info("Writing UsersFeedCommit to index ", this.usersFeedIndex)
       await feedWriter.upload(stamp, userRef.reference, { index: this.usersFeedIndex });
       this.usersFeedIndex++;
       this.logger.debug("Upload was successful!");
@@ -573,10 +567,12 @@ export class SwarmChat {
       this.logger.debug(`New UsersFeedCommit received!  ${objectFromFeed}`)
     
       const validUsers = objectFromFeed.users.filter((user) => this.utils.validateUserObject(user));
+      if (validUsers.length < objectFromFeed.users.length) this.logger.error(`There are ${objectFromFeed.users.length-validUsers.length} invalid user entries in this UsersFeedCommit!`);
 
       let newUsers: UserWithIndex[] = [];
       if (!objectFromFeed.overwrite) {
         // Registration
+        if (!validUsers[0]) throw "The User object for this registration is invalid!";
         newUsers = [...this.users];
         const theNewUser = {
           ...validUsers[0],
@@ -592,19 +588,18 @@ export class SwarmChat {
       }
     
       if (!this.gsocSubscribtion) {
-        console.info("Overwriting users object...")
-        console.log("usersFeedIndex: ", this.usersFeedIndex)
-        console.log("New users length:", newUsers.length);
+        this.logger.debug("Overwriting users object...")
+        this.logger.debug("usersFeedIndex: ", this.usersFeedIndex)
+        this.logger.debug("New users length:", newUsers.length);
         if (newUsers.length > 0) {
-          console.info("Addres at index 0: ", newUsers[0].address);
-          console.info("Username at index 0: ", newUsers[0].username);
+          this.logger.debug("Addres at index 0: ", newUsers[0].address);
+          this.logger.debug("Username at index 0: ", newUsers[0].username);
         }
         this.setUsers(this.utils.removeDuplicateUsers(newUsers));
       }
 
       this.usersFeedIndex++;                                                                       // We assume that download was successful. Next time we are checking next index.
     
-      // update userActivityTable
       this.updateUserActivityAtRegistration();
       this.userFetchIsRunning = false;
       this.emitStateEvent(EVENTS.LOADING_USERS, false);
@@ -642,16 +637,10 @@ export class SwarmChat {
         index: -1
       };
 
-      console.info("\n------Length of users list at userRegisteredThroughGsoc: ", this.users.length)
-      if (this.users.length > 0) {
-        console.info("Addres at last index: ", this.users[this.users.length-1].address);
-        console.info("Username at last index: ", this.users[this.users.length-1].username);
-      }
+      if (!this.utils.validateUserObject(user)) throw "This user object is invalid!";
 
       if (!this.isRegistered(user.address)) {
         const newList = [...this.users, user];
-        //this.utils.removeDuplicateUsers(newList);
-  //TODO we are not waiting for this operation to finish, is that good?
         this.writeUsersFeedCommit(
           topic,
           stamp,
@@ -701,7 +690,7 @@ export class SwarmChat {
         currIndex = latestIndex === -1 ? nextIndex : latestIndex;
       }
     
-      this.adjustParamerets(rawTopic);      
+      this.adjustParameters(rawTopic);
 
       // We measure the request time with the first Bee API request, with the second request, we do not do this, because it is very similar
       const feedReader = this.bee.makeFeedReader('sequence', topic, user.address, { timeout: this.MAX_TIMEOUT });
@@ -728,17 +717,11 @@ export class SwarmChat {
       if (messageData.timestamp + this.IDLE_TIME*2 > Date.now()) {
         this.messages.push(messageData);
         
-        // TODO GSOC - this needs to be conditional, only Gateway is doing this. It's not a problem if other users are doing it as well, but has no significance
         // Update userActivityTable
         this.updateUserActivityAtNewMessage(messageData);
 
         this.messagesIndex++;
       }
-    
-      // TODO - discuss with the team
-      /*if (messages.length > 300) {
-        messages.shift();
-      }*/
     
       this.emitter.emit(EVENTS.RECEIVE_MESSAGE, this.messages);
     } catch (error) {
@@ -760,8 +743,7 @@ export class SwarmChat {
   }
 
   /** Adjusts maxParallel and message fetch interval */
-  //TODO this might be an utils function, but we need to pass a lot of paramerers, and in the other direction as well (return)
-  private adjustParamerets(topic: string) {
+  private adjustParameters(topic: string) {
     // Adjust max parallel request count, based on avg request time, which indicates, how much the node is overloaded
     if (this.reqTimeAvg.getAverage() > this.DECREASE_LIMIT) this.messagesQueue.decreaseMax();
     if (this.reqTimeAvg.getAverage() < this.INCREASE_LIMIT) this.messagesQueue.increaseMax(this.users.length * 1);
@@ -964,6 +946,7 @@ export class SwarmChat {
     this.startActivityAnalyzes(roomTopic, identity.address as EthAddress, stamp as BatchId);
     
     do {
+      if (this.stopSignal) break;
       await this.utils.sleep(5000);
     } while (true)
   }
@@ -982,5 +965,7 @@ export class SwarmChat {
       clearInterval(this.messageFetchClock);
       this.messageFetchClock = null;
     }
+
+    this.stopSignal = true;
   }
 }

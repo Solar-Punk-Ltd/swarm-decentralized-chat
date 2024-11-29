@@ -1,6 +1,6 @@
-import { Wallet } from "ethers";
+import { ethers, Wallet } from "ethers";
 import { SwarmChat } from "../src/core";
-import { EthAddress, MessageData, User, UserActivity, UserWithIndex } from "../src/types";
+import { Bytes, EthAddress, MessageData, User, UserActivity, UserWithIndex } from "../src/types";
 import { BatchId } from "@ethersphere/bee-js";
 import { createMockActivityTable, userListWithNUsers } from "./fixtures";
 import { EVENTS, MINUTE } from "../src/constants";
@@ -645,5 +645,651 @@ describe('subscribeToGsoc', () => {
     const result = (chat as any).utils.subscribeToGsoc(url, stamp, topic, resourceId, callback);
 
     expect(result).toEqual({ unsubscribe: expect.any(Function) });
+  });
+});
+
+
+describe('removeIdleUsers', () => {
+  let chat: SwarmChat;
+
+  beforeEach(() => {
+    chat = new SwarmChat();
+    jest.restoreAllMocks();
+  });
+
+  it('should return for new users', async () => {
+    const getActiveUsersSpy = jest.spyOn((chat as any).utils, 'getActiveUsers');
+    const writeUsersFeedCommitSpy = jest.spyOn(chat as any, 'writeUsersFeedCommit');
+    const setUsersSpy = jest.spyOn(chat as any, 'setUsers');
+
+    await chat['removeIdleUsers']("example-topic", "0x123" as EthAddress, "000" as BatchId);
+
+    expect(getActiveUsersSpy).not.toHaveBeenCalled();
+    expect(writeUsersFeedCommitSpy).not.toHaveBeenCalled();
+    expect(setUsersSpy).not.toHaveBeenCalled();
+  });
+
+  it('should log warning message if removeIdleIsRunning is true', async () => {
+    chat.changeLogLevel('warn');
+    const loggerWarnSpy = jest.spyOn((chat as any).logger, 'warn');
+    const getActiveUsersSpy = jest.spyOn((chat as any).utils, 'getActiveUsers');
+    const writeUsersFeedCommitSpy = jest.spyOn(chat as any, 'writeUsersFeedCommit');
+    const setUsersSpy = jest.spyOn(chat as any, 'setUsers');
+    
+    chat['removeIdleIsRunning'] = true;
+    chat['reqCount'] = 33;
+    await chat['removeIdleUsers']("example-topic", "0x123" as EthAddress, "000" as BatchId);
+
+    expect(loggerWarnSpy).toHaveBeenCalledWith("Previous removeIdleUsers is still running");
+    expect(getActiveUsersSpy).not.toHaveBeenCalled();
+    expect(writeUsersFeedCommitSpy).not.toHaveBeenCalled();
+    expect(setUsersSpy).not.toHaveBeenCalled();
+  });
+
+  it('should call getActiveUsers if reqCount is bigger than 32 and removeIdleIsRunning is false', async () => {
+    const getActiveUsersSpy = jest.spyOn((chat as any).utils, 'getActiveUsers');
+    chat['reqCount'] = 33;
+
+    await chat['removeIdleUsers']("example-topic", "0x123" as EthAddress, "000" as BatchId);
+
+    expect(getActiveUsersSpy).toHaveBeenCalled();
+  });
+
+  it('should return, if there are no active users and not in gateway mode (after writing UsersFeedCommit)', async () => {
+    const getActiveUsersSpy = jest.spyOn((chat as any).utils, 'getActiveUsers');
+    const writeUsersFeedCommitSpy = jest.spyOn(chat as any, 'writeUsersFeedCommit');
+    const selectUsersFeedCommitWriterSpy = jest.spyOn((chat as any).utils, 'selectUsersFeedCommitWriter');
+    const setUsersSpy = jest.spyOn(chat as any, 'setUsers');
+    getActiveUsersSpy.mockReturnValue([]);
+
+    chat['reqCount'] = 33;
+    await chat['removeIdleUsers']("example-topic", "0x123" as EthAddress, "000" as BatchId);
+
+    expect(getActiveUsersSpy).toHaveBeenCalled();
+    expect(writeUsersFeedCommitSpy).toHaveBeenCalled();
+    expect(selectUsersFeedCommitWriterSpy).not.toHaveBeenCalled();
+    expect(setUsersSpy).not.toHaveBeenCalled();
+  });
+
+  it('should call selectUsersFeedCommitWriter if not in Gateway mode and there are active users', async () => {
+    const getActiveUsersSpy = jest.spyOn((chat as any).utils, 'getActiveUsers');
+    const writeUsersFeedCommitSpy = jest.spyOn(chat as any, 'writeUsersFeedCommit');
+    const selectUsersFeedCommitWriterSpy = jest.spyOn((chat as any).utils, 'selectUsersFeedCommitWriter');
+    const setUsersSpy = jest.spyOn(chat as any, 'setUsers');
+    getActiveUsersSpy.mockReturnValue([{ address: '0x123', index: 1 }]);
+    
+    chat['reqCount'] = 33;
+    await chat['removeIdleUsers']("example-topic", "0x123" as EthAddress, "000" as BatchId);
+
+    expect(getActiveUsersSpy).toHaveBeenCalled();
+    expect(writeUsersFeedCommitSpy).toHaveBeenCalled();
+    expect(selectUsersFeedCommitWriterSpy).toHaveBeenCalled();
+    expect(setUsersSpy).toHaveBeenCalled();
+  });
+
+  it('should throw error when in Gateway mode and not the gateway is running removeIdleUsers', async () => {
+    const handleErrorSpy = jest.spyOn(chat as any, 'handleError');
+    chat['gateway'] = "gatewayOverlayAddress";
+    chat['reqCount'] = 33;
+
+    await chat['removeIdleUsers']("example-topic", "0x123" as EthAddress, "000" as BatchId);
+
+    expect(handleErrorSpy).toHaveBeenCalledWith({
+      error: "Only Gateway should run  this function in gateway mode!",
+      context: 'removeIdleUsers',
+      throw: false
+    });
+  });
+
+  it('should call writeUsersFeedCommit and setUsers when in Gateway mode and gateway is running removeIdleUsers', async () => {
+    const getActiveUsersSpy = jest.spyOn((chat as any).utils, 'getActiveUsers');
+    const writeUsersFeedCommitSpy = jest.spyOn(chat as any, 'writeUsersFeedCommit');
+    const setUsersSpy = jest.spyOn(chat as any, 'setUsers');
+    getActiveUsersSpy.mockReturnValue([{ address: '0x123', index: 1 }]);
+    chat['gateway'] = "gatewayOverlayAddress";
+    chat['reqCount'] = 33;
+    chat['gsocSubscribtion'] = {
+      close: jest.fn(),
+      gsocAddress: "address" as unknown as Bytes<32>
+    };
+
+    await chat['removeIdleUsers']("example-topic", "0x123" as EthAddress, "000" as BatchId);
+
+    expect(getActiveUsersSpy).toHaveReturnedWith([{ address: '0x123', index: 1 }]);
+    expect(writeUsersFeedCommitSpy).toHaveBeenCalled();
+    expect(setUsersSpy).toHaveBeenCalled();
+  });
+});
+
+
+describe('writeUsersFeedCommit', () => {
+  let chat: SwarmChat;
+
+  beforeEach(() => {
+    chat = new SwarmChat();
+    jest.resetAllMocks();
+  });
+
+  it('should log user was selected message, in info mode', () => {
+    chat.changeLogLevel('info');
+    const loggerInfoSpy = jest.spyOn((chat as any).logger, 'info');
+
+    (chat as any).writeUsersFeedCommit("example-topic", "000" as BatchId, "0x123" as EthAddress);
+
+    expect(loggerInfoSpy).toHaveBeenCalledWith("The user was selected for submitting the UsersFeedCommit! (removeIdleUsers)");
+  });
+
+  it('should call removeDuplicateUsers', () => {
+    const removeDuplicateUsersSpy = jest.spyOn((chat as any).utils, 'removeDuplicateUsers');
+
+    (chat as any).writeUsersFeedCommit("example-topic", "000" as BatchId, ["0x123" as EthAddress]);
+
+    expect(removeDuplicateUsersSpy).toHaveBeenCalledWith(["0x123"]);
+  });
+
+  it('should call uploadObjectToBee', async () => {
+    const uploadObjectToBeesSpy = jest.spyOn((chat as any).utils, 'uploadObjectToBee');
+
+    (chat as any).writeUsersFeedCommit("example-topic", "000" as BatchId, ["0x123" as EthAddress]);
+
+    expect(uploadObjectToBeesSpy).toHaveBeenCalled();
+  });
+
+  it('should throw error if uploadObjectToBee fails', async () => {
+    const uploadObjectToBeeSpy = jest.spyOn((chat as any).utils, 'uploadObjectToBee');
+    const handleErrorSpy = jest.spyOn((chat as any), 'handleError');
+    uploadObjectToBeeSpy.mockReturnValue(null);
+
+    await (chat as any).writeUsersFeedCommit("example-topic", "000" as BatchId, ["0x123" as EthAddress]);
+    
+    expect(handleErrorSpy).toHaveBeenCalledWith({
+      error: Error("Could not upload user list to bee"),
+      context: 'writeUsersFeedCommit',
+      throw: false
+    });
+  });
+
+  it('should call graffitiFeedWriterFromTopic', async () => {
+    const graffitiFeedWriterFromTopicSpy = jest.spyOn((chat as any).utils, 'graffitiFeedWriterFromTopic');
+    const uploadObjectToBeeSpy = jest.spyOn((chat as any).utils, 'uploadObjectToBee');
+    uploadObjectToBeeSpy.mockReturnValue("SwarmRef");
+
+    await (chat as any).writeUsersFeedCommit("example-topic", "000" as BatchId, ["0x123" as EthAddress]);
+
+    expect(graffitiFeedWriterFromTopicSpy).toHaveBeenCalled();
+  });
+
+  it('should fetch feed index, if usersFeedIndex is falsy', async () => {
+    chat.changeLogLevel('info');
+    chat['usersFeedIndex'] = 0;
+    const loggerInfoSpy = jest.spyOn((chat as any).logger, 'info');
+    const hexStringToNumberSpy = jest.spyOn((chat as any).utils, 'hexStringToNumber');
+    const uploadObjectToBeeSpy = jest.spyOn((chat as any).utils, 'uploadObjectToBee');
+    const graffitiFeedWriterFromTopicSpy = jest.spyOn((chat as any).utils, 'graffitiFeedWriterFromTopic');
+    uploadObjectToBeeSpy.mockReturnValue("SwarmRef");
+    const mockFeedWriter = {
+      upload: jest.fn().mockResolvedValue(undefined),
+      download: jest.fn().mockResolvedValue({ feedIndexNext: '0x1' }),
+    };
+    graffitiFeedWriterFromTopicSpy.mockReturnValue(mockFeedWriter);
+
+    await (chat as any).writeUsersFeedCommit("example-topic", "000" as BatchId, ["0x123" as EthAddress]);
+
+    expect(loggerInfoSpy).toHaveBeenCalledWith("Fetching current index...");
+    expect(hexStringToNumberSpy).toHaveBeenCalled();
+  });
+
+  it('should write UsersFeedCommit to feed', async () => {
+    chat.changeLogLevel('info');
+    chat['usersFeedIndex'] = 5;
+    const loggerInfoSpy = jest.spyOn((chat as any).logger, 'info');
+    const uploadObjectToBeeSpy = jest.spyOn((chat as any).utils, 'uploadObjectToBee');
+    uploadObjectToBeeSpy.mockResolvedValue({ reference: 'mockSwarmRef' });
+    const graffitiFeedWriterFromTopicSpy = jest.spyOn((chat as any).utils, 'graffitiFeedWriterFromTopic');
+    const mockFeedWriter = {
+      upload: jest.fn().mockResolvedValue(undefined),
+      download: jest.fn().mockResolvedValue({ feedIndexNext: '0x1' }),
+    };
+    graffitiFeedWriterFromTopicSpy.mockReturnValue(mockFeedWriter);
+
+    await (chat as any).writeUsersFeedCommit("example-topic", "000" as BatchId, ["0x123" as EthAddress]);
+
+    expect(loggerInfoSpy).toHaveBeenLastCalledWith("Writing UsersFeedCommit to index ", 5);
+    expect(mockFeedWriter.upload).toHaveBeenCalled();
+  });
+});
+
+
+describe('getNewUsers', () => {
+  let chat: SwarmChat;
+  let mockBee: any;
+  let mockUtils: any;
+  let mockLogger: any;
+
+  beforeEach(() => {
+    jest.resetAllMocks();
+    mockBee = {
+      downloadData: jest.fn()
+    };
+
+    mockUtils = {
+      graffitiFeedReaderFromTopic: jest.fn().mockReturnValue({
+        download: jest.fn()
+      }),
+      validateUserObject: jest.fn().mockReturnValue(true),
+      removeDuplicateUsers: jest.fn((users) => users),
+      isNotFoundError: jest.fn().mockReturnValue(false)
+    };
+
+    mockLogger = {
+      debug: jest.fn(),
+      info: jest.fn(),
+      error: jest.fn()
+    };
+
+    chat = new SwarmChat();
+    
+    (chat as any).bee = mockBee;
+    (chat as any).utils = mockUtils;
+    (chat as any).logger = mockLogger;
+
+  });
+
+  it('should call graffitiFeedReaderFromTopic', async () => {
+    const topic = "example-topic";
+    const mockFeedReader = {
+      download: jest.fn().mockResolvedValue({ reference: 'mock-reference' })
+    };
+    mockUtils.graffitiFeedReaderFromTopic.mockReturnValue(mockFeedReader);
+
+    mockBee.downloadData.mockResolvedValue({
+      json: jest.fn().mockReturnValue({
+        users: [],
+        overwrite: false
+      })
+    });
+
+    await chat.getNewUsers(topic);
+
+    expect(mockUtils.graffitiFeedReaderFromTopic).toHaveBeenCalledWith(mockBee, topic);
+  });
+
+  it('should handle registration of a new user', async () => {
+    const newUser = (await userListWithNUsers(1))[0];
+    const mockFeedEntry = { reference: 'SwarmReference' };
+    const mockEmitStateEvent = jest.spyOn(chat as any, 'emitStateEvent');
+
+    const mockFeedReader = {
+      download: jest.fn().mockResolvedValue(mockFeedEntry)
+    };
+    mockUtils.graffitiFeedReaderFromTopic.mockReturnValue(mockFeedReader);
+
+    mockBee.downloadData.mockResolvedValue({
+      json: jest.fn().mockReturnValue({
+        users: [newUser],
+        overwrite: false
+      })
+    });
+
+    await chat.getNewUsers("test-topic");
+
+    expect(mockEmitStateEvent).toHaveBeenCalledWith(EVENTS.LOADING_USERS, true);
+    expect(mockEmitStateEvent).toHaveBeenCalledWith(EVENTS.USER_REGISTERED, newUser.username);
+    expect(mockEmitStateEvent).toHaveBeenCalledWith(EVENTS.LOADING_USERS, false);
+
+    expect((chat as any).newlyRegisteredUsers).toHaveLength(1);
+    expect((chat as any).newlyRegisteredUsers[0]).toMatchObject({
+      ...newUser,
+      index: -1
+    });
+  });
+
+  it('should handle overwrite scenario', async () => {
+    const users = await userListWithNUsers(2);
+    const mockFeedEntry = { reference: 'SwarmReference' };
+
+    const mockFeedReader = {
+      download: jest.fn().mockResolvedValue(mockFeedEntry)
+    };
+    mockUtils.graffitiFeedReaderFromTopic.mockReturnValue(mockFeedReader);
+
+    mockBee.downloadData.mockResolvedValue({
+      json: jest.fn().mockReturnValue({
+        users,
+        overwrite: true
+      })
+    });
+
+    await chat.getNewUsers("test-topic");
+
+    expect(mockUtils.removeDuplicateUsers).toHaveBeenCalled();
+    expect((chat as any).newlyRegisteredUsers).toHaveLength(0);
+  });
+
+  it('should handle timeout error', async () => {
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+    const timeoutError = new Error('timeout occurred');
+
+    const mockFeedReader = {
+      download: jest.fn().mockRejectedValue(timeoutError)
+    };
+    mockUtils.graffitiFeedReaderFromTopic.mockReturnValue(mockFeedReader);
+
+    await chat.getNewUsers("test-topic");
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith("timeout error");
+    expect(chat['userFetchIsRunning']).toBe(false);
+
+    consoleErrorSpy.mockRestore();
+  });
+
+  it('should handle not found error', async () => {
+    const notFoundError = new Error('Not found');
+    mockUtils.isNotFoundError.mockReturnValue(true);
+
+    const mockFeedReader = {
+      download: jest.fn().mockRejectedValue(notFoundError)
+    };
+    mockUtils.graffitiFeedReaderFromTopic.mockReturnValue(mockFeedReader);
+
+    await chat.getNewUsers("test-topic");
+
+    expect(chat['userFetchIsRunning']).toBe(false);
+    expect(mockUtils.isNotFoundError).toHaveBeenCalledWith(notFoundError);
+  });
+
+  it('should increment usersFeedIndex after successful download', async () => {
+    const initialIndex = chat['usersFeedIndex'];
+    const mockFeedEntry = { reference: 'SwarmReference' };
+
+    const mockFeedReader = {
+      download: jest.fn().mockResolvedValue(mockFeedEntry)
+    };
+    mockUtils.graffitiFeedReaderFromTopic.mockReturnValue(mockFeedReader);
+
+    mockBee.downloadData.mockResolvedValue({
+      json: jest.fn().mockReturnValue({
+        users: [],
+        overwrite: true
+      })
+    });
+
+    await chat.getNewUsers("test-topic");
+
+    expect(chat['usersFeedIndex']).toBe(initialIndex + 1);
+  });
+});
+
+
+describe('userRegisteredThroughGsoc', () => {
+  let chat: SwarmChat;
+  const topic = "exampleTopic";
+  const stamp = "exampleStamp";
+
+  beforeEach(() => {
+    jest.resetAllMocks();
+
+    chat = new SwarmChat();
+
+  });
+
+  it('should add a new user when not already registered', async () => {
+    const isRegisteredSpy = jest.spyOn(chat, 'isRegistered').mockReturnValue(false);
+    const writeUsersFeedCommitSpy = jest.spyOn(chat as any, 'writeUsersFeedCommit');
+    const setUsersSpy = jest.spyOn(chat as any, 'setUsers');
+    const updateUserActivitySpy = jest.spyOn(chat as any, 'updateUserActivityAtRegistration');
+
+    const user = (await userListWithNUsers(1))[0];
+    const gsocMessage = JSON.stringify(user);
+
+    (chat as any).userRegisteredThroughGsoc(topic, stamp, gsocMessage);
+
+    expect(isRegisteredSpy).toHaveBeenCalledWith(user.address);
+    expect(writeUsersFeedCommitSpy).toHaveBeenCalledWith(topic, stamp, expect.any(Array));
+    expect(setUsersSpy).toHaveBeenCalledWith(expect.any(Array));
+    expect(updateUserActivitySpy).toHaveBeenCalled();
+
+    expect(writeUsersFeedCommitSpy.mock.calls[0][2]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          ...user,
+          index: -1
+        })
+      ])
+    );
+  });
+
+  it('should not add a user that is already registered', async () => {
+    const isRegisteredSpy = jest.spyOn(chat, 'isRegistered').mockReturnValue(true);
+    const writeUsersFeedCommitSpy = jest.spyOn(chat as any, 'writeUsersFeedCommit');
+    const setUsersSpy = jest.spyOn(chat as any, 'setUsers');
+    const updateUserActivitySpy = jest.spyOn(chat as any, 'updateUserActivityAtRegistration');
+
+    const mockUser = (await userListWithNUsers(1))[0];
+    const gsocMessage = JSON.stringify(mockUser);
+
+    (chat as any).userRegisteredThroughGsoc(topic, stamp, gsocMessage);
+
+    expect(isRegisteredSpy).toHaveBeenCalledWith(mockUser.address);
+    expect(writeUsersFeedCommitSpy).not.toHaveBeenCalled();
+    expect(setUsersSpy).not.toHaveBeenCalled();
+    expect(updateUserActivitySpy).toHaveBeenCalled();
+  });
+
+  it('should handle invalid JSON gracefully', () => {
+    const handleErrorSpy = jest.spyOn(chat as any, 'handleError');
+
+    const invalidGsocMessage = '{invalid json}';
+
+    (chat as any).userRegisteredThroughGsoc(topic, stamp, invalidGsocMessage);
+
+    expect(handleErrorSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: 'userRegisteredThroughGsoc',
+        throw: false
+      })
+    );
+  });
+
+  it('should handle missing user properties', () => {
+    const handleErrorSpy = jest.spyOn(chat as any, 'handleError');
+
+    const incompleteUser = { someProperty: 'value' };
+    const gsocMessage = JSON.stringify(incompleteUser);
+
+    (chat as any).userRegisteredThroughGsoc(topic, stamp, gsocMessage);
+
+    expect(handleErrorSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: 'userRegisteredThroughGsoc',
+        throw: false
+      })
+    );
+  });
+});
+
+
+describe('host', () => {
+  let chat: SwarmChat;
+  const topic = 'test-room';
+  const stamp = '123' as BatchId;
+  const mockIdentity = {
+    address: '0x1234567890123456789012345678901234567890' as EthAddress
+  };
+
+  
+  beforeEach(() => {
+    jest.resetAllMocks();
+    
+    chat = new SwarmChat();
+    
+    chat['initChatRoom'] = jest.fn().mockResolvedValue(undefined);
+    chat['startMessageFetchProcess'] = jest.fn();
+    chat['startActivityAnalyzes'] = jest.fn();
+    chat['handleError'] = jest.fn();
+    chat['utils'].sleep = jest.fn().mockResolvedValue(undefined);
+    
+    jest.mock('ethers', () => ({
+      Wallet: {
+        createRandom: jest.fn(() => ({
+          address: '0x1234567890123456789012345678901234567890'
+        }))
+      }
+    }));
+  });
+
+  it('should call initChatRoom with proper parameters', () => {
+    const initChatRoomSpy = jest.spyOn(chat as any, 'initChatRoom');
+  
+    chat.host(topic, stamp);
+
+    chat.stop();
+  
+    expect(initChatRoomSpy).toHaveBeenCalledWith(topic, stamp);
+  });
+
+  it('should call startMessageFetchProcess', async () => {
+    const startMessageFetchProcessSpy = jest.spyOn(chat as any, 'startMessageFetchProcess');
+
+    chat.host(topic, stamp);
+
+    await chat['utils'].sleep(50);
+
+    chat.stop();
+
+    expect(startMessageFetchProcessSpy).toHaveBeenCalled();
+  });
+
+  it('should call startActivityAnalyzes', async () => {
+    const startActivityAnalyzesSpy = jest.spyOn(chat as any, 'startActivityAnalyzes');
+
+    chat.host(topic, stamp);
+
+    await chat['utils'].sleep(50);
+
+    chat.stop();
+
+    expect(startActivityAnalyzesSpy).toHaveBeenCalled();
+  });
+
+  it('should create a random wallet', async () => {
+    const createRandomSpy = jest.spyOn(ethers.Wallet, 'createRandom');
+
+    chat.host(topic, stamp);
+    await chat['utils'].sleep(50);
+    chat.stop();
+
+    expect(createRandomSpy).toHaveBeenCalled();
+  });
+});
+
+
+describe('mineResourceId', () => {
+  let chat: SwarmChat;
+  
+  const mockHexToBytes = jest.fn().mockReturnValue(new Uint8Array([5, 6, 7, 8]));
+  const mockBytesToHex = jest.fn().mockReturnValue('0x12345');
+  const mockHandleError = jest.fn().mockImplementation((errObject) => {
+    if (errObject.throw) {
+      console.error(`Error in ${errObject.context}`, errObject.error);
+    }
+  });
+
+  beforeEach(() => {
+    //jest.clearAllMocks();
+    //jest.resetAllMocks();
+
+    jest.mock('@anythread/gsoc', () => {
+      return {
+        InformationSignal: jest.fn().mockImplementation((url, options) => {
+          return {
+            mineResourceId: jest.fn().mockReturnValue({
+              resourceId: new Uint8Array([1, 2, 3, 4]),
+            }),
+          };
+        }),
+      };
+    });
+    
+    chat = new SwarmChat();
+    
+    (chat as any).hexToBytes = mockHexToBytes;
+    (chat as any).bytesToHex = mockBytesToHex;
+    (chat as any).handleError = mockHandleError;
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });  
+
+  it('should call mineResourceId and return hex resource ID', async () => {
+    const url = "http://example.com";
+    const stamp = "batch123";
+    const gateway = "deadbeaf";
+    const topic = "test-topic";
+
+    const result = await (chat as any).utils.mineResourceId(url, stamp, gateway, topic);
+
+    const InformationSignal = require('@anythread/gsoc').InformationSignal;
+    expect(InformationSignal).toHaveBeenCalledWith(url, {
+      postageBatchId: stamp,
+      consensus: {
+        id: `SwarmDecentralizedChat::${topic}`,
+        assertRecord: expect.any(Function)
+      }
+    });
+
+    expect(mockHexToBytes).toHaveBeenCalledWith(gateway);
+
+    const informationSignalInstance = InformationSignal.mock.instances[0];
+    expect(informationSignalInstance.mineResourceId).toHaveBeenCalledWith(
+      new Uint8Array([5, 6, 7, 8]), 
+      11
+    );
+
+    expect(mockBytesToHex).toHaveBeenCalledWith(new Uint8Array([1, 2, 3, 4]));
+
+    expect(result).toBe('0x12345');
+  });
+
+  it('should handle errors and return null', async () => {
+    const InformationSignal = require('@anythread/gsoc').InformationSignal;
+    InformationSignal.mockImplementationOnce(() => {
+      return {
+        mineResourceId: jest.fn().mockImplementation(() => {
+          throw new Error('Test error');
+        })
+      };
+    });
+
+    const url = "http://example.com";
+    const stamp = "batch123";
+    const gateway = "deafbeef";
+    const topic = "test-topic";
+
+    const result = await (chat as any).utils.mineResourceId(url, stamp, gateway, topic);
+
+    expect(mockHandleError).toHaveBeenCalledWith({
+      error: expect.any(Error),
+      context: 'mineResourceId',
+      throw: true
+    });
+
+    expect(result).toBeNull();
+  });
+
+  it('should use the default assertRecord function', async () => {
+    const url = "http://example.com";
+    const stamp = "batch123";
+    const gateway = "deadbeef";
+    const topic = "test-topic";
+
+    await (chat as any).utils.mineResourceId(url, stamp, gateway, topic);
+
+    const InformationSignal = require('@anythread/gsoc').InformationSignal;
+    const consensusOptions = InformationSignal.mock.calls[0][1].consensus;
+
+    expect(consensusOptions.assertRecord({})).toBe(true);
+    expect(consensusOptions.assertRecord({ some: 'input' })).toBe(true);
   });
 });

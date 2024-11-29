@@ -1,6 +1,6 @@
 import { Signature, Wallet } from "ethers";
 import { HOUR, MINUTE, SECOND } from "../src/constants";
-import { EthAddress, User, UserActivity } from "../src/types";
+import { EthAddress, MessageData, User, UserActivity, UserWithIndex } from "../src/types";
 
 
 /**
@@ -50,6 +50,27 @@ function generateAlphabeticalNames(n: number): string[] {
   return names;
 }
 
+export async function generateAlice() {
+  const wallet = new Wallet("0x4c0883a69102937d6231471b5dbb6204fe5129617082792ae3d8e226e01fdf99");
+
+
+  const alice: UserWithIndex = {
+    index: 0,
+    username: "Alice",
+    address: wallet.address as EthAddress,
+    timestamp: 1231006505000,
+    signature: (await wallet.signMessage(
+      JSON.stringify({
+        username: "Alice",
+        address: wallet.address,
+        timestamp: 1231006505000,
+      })
+    )) as unknown as Signature,
+  }
+
+  return alice;
+}
+
 export function createMockActivityTable(users: User[], timestamps: number[] = []): UserActivity {
   return users.reduce((acc, user, index) => {
     // If timestamps array is provided, use the value from the array; otherwise, use the user's timestamp
@@ -61,4 +82,32 @@ export function createMockActivityTable(users: User[], timestamps: number[] = []
     };
     return acc;
   }, {} as UserActivity);
+}
+
+export function someMessages(users: UserWithIndex[], n: number): MessageData[] {
+  const resultArr: MessageData[] = [];
+
+  for (let i = 0; i < n; i++) {
+    const k = i % users.length; // Round-robin selection of users
+    const msg: MessageData = {
+      message: `Message ${i}`,
+      username: users[k].username,
+      address: users[k].address,
+      timestamp: Date.now()
+    };
+
+    resultArr.push(msg);
+  }
+
+  return resultArr;
+}
+
+export function randomizeMessages(messages: MessageData[]): MessageData[] {
+  // Fisher-Yates shuffle
+  for (let i = messages.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [messages[i], messages[j]] = [messages[j], messages[i]];
+  }
+
+  return messages;
 }

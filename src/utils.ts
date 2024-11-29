@@ -12,6 +12,14 @@ export class SwarmChatUtils {
   private logger: pino.Logger;
 
   constructor(handleError: (errObject: ErrorObject) => void, logger: pino.Logger) {
+    if (typeof handleError !== 'function') {
+      throw new TypeError('handleError must be a function');
+    }
+  
+    if (!logger || typeof logger.error !== 'function') {
+      throw new TypeError('A valid logger with an error method is required');
+    }
+    
     this.handleError = handleError;
     this.logger = logger;
   }
@@ -166,35 +174,6 @@ export class SwarmChatUtils {
     }
   }
 
-  /** retryAwaitableAsync will retry a promise if fails, default retry number is 3, default delay between attempts is 250 ms */
-  async retryAwaitableAsync<T>(
-    fn: () => Promise<T>,
-    retries: number = 3,
-    delay: number = 250
-  ): Promise<T> {
-    return new Promise((resolve, reject) => {
-      fn()
-        .then(resolve)
-        .catch((error) => {
-          if (retries > 0) {
-            this.logger.info(`Retrying... Attempts left: ${retries}. Error: ${error.message}`);
-            setTimeout(() => {
-              this.retryAwaitableAsync(fn, retries - 1, delay)
-                .then(resolve)
-                .catch(reject);
-            }, delay);
-          } else {
-            this.handleError({
-              error: error as unknown as Error,
-              context: `Failed after ${retries} initial attempts. Last error: ${error.message}`,
-              throw: false
-            });
-            reject(error);
-          }
-        });
-    });
-  }
-
   /** Uploads a js object to Swarm, a valid stamp needs to be provided */
   async uploadObjectToBee(
     bee: Bee, 
@@ -326,13 +305,15 @@ export class SwarmChatUtils {
     return sortedActiveUsers.slice(0, limit);
   }
 
-  /** GSOC UTILS */
+  /// GSOC RELATED UTILS
   private isHexString<Length extends number = number>(s: unknown, len?: number): s is HexString<Length> {
     return typeof s === 'string' && /^[0-9a-f]+$/i.test(s) && (!len || s.length === len)
   }
+
   private isPrefixedHexString(s: unknown): s is PrefixedHexString {
     return typeof s === 'string' && /^0x[0-9a-f]+$/i.test(s)
   }
+
   private assertHexString<Length extends number = number>(
     s: unknown,
     len?: number,
@@ -348,6 +329,7 @@ export class SwarmChatUtils {
       throw new TypeError(`${name} not valid hex string${lengthMsg}: ${s}`)
     }
   }
+
   private hexToBytes<Length extends number, LengthHex extends number = number>(
     hex: HexString<LengthHex>,
   ): Bytes<Length> {
@@ -361,6 +343,7 @@ export class SwarmChatUtils {
   
     return bytes as Bytes<Length>
   }
+  
   private bytesToHex<Length extends number = number>(bytes: Uint8Array, len?: Length): HexString<Length> {
     const hexByte = (n: number) => n.toString(16).padStart(2, '0')
     const hex = Array.from(bytes, hexByte).join('') as HexString<Length>
@@ -393,6 +376,7 @@ export class SwarmChatUtils {
       return this.bytesToHex(mineResult.resourceId);
 
     } catch (error) {
+      console.error(error)
       this.handleError({
         error: error as unknown as Error,
         context: `mineResourceId`,
