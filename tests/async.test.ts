@@ -364,7 +364,7 @@ describe('AsyncQueue.decreaseMax', () => {
 });
 
 
-describe('AsyncQueue - clearQueue', () => {
+describe('AsyncQueue.clearQueue', () => {
   let asyncQueue: AsyncQueue;
   let logger: pino.Logger;
   let handleError: jest.Mock;
@@ -405,5 +405,29 @@ describe('AsyncQueue - clearQueue', () => {
     await clearQueuePromise;
 
     expect(taskResolved).toBe(true);
+  });
+});
+
+
+describe('AsyncQueue.waitForProcessing', () => {
+  let asyncQueue: AsyncQueue;
+  let logger: pino.Logger;
+  let handleError: jest.Mock;
+
+  beforeEach(() => {
+    handleError = jest.fn();
+    logger = pino({ level: 'silent' });
+    asyncQueue = new AsyncQueue({}, handleError, logger);
+  });
+
+  it('should resolve immediately if no tasks are in progress', async () => {
+    asyncQueue['isProcessing'] = false;
+    asyncQueue['inProgressCount'] = 0;
+
+    const startTime = Date.now();
+    await asyncQueue.waitForProcessing();
+    const duration = Date.now() - startTime;
+
+    expect(duration).toBeLessThan(50);
   });
 });
