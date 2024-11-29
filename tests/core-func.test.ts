@@ -270,3 +270,57 @@ describe('isRegistered', () => {
     expect(chat.isRegistered(unregisteredAddress)).toBe(false);
   });
 });
+
+
+describe('stop', () => {
+  let chat: SwarmChat;
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    chat = new SwarmChat();
+  });
+
+  afterEach(() => {
+    jest.clearAllTimers();
+    jest.restoreAllMocks();
+  });
+
+  it('should clear removeIdleUsersInterval if it exists', () => {
+    const clearIntervalSpy = jest.spyOn(global, 'clearInterval');
+    const originalInterval = setInterval(() => {}, 1000);
+    chat['removeIdleUsersInterval'] = originalInterval;
+
+    chat.stop();
+
+    expect(clearIntervalSpy).toHaveBeenCalledWith(originalInterval);
+    expect(chat['removeIdleUsersInterval']).toBeNull();
+  });
+
+  it('should clear userFetchClock if it exists', () => {
+    const clearIntervalSpy = jest.spyOn(global, 'clearInterval');
+    const originalInterval = setInterval(() => {}, 1000);
+    chat['userFetchClock'] = originalInterval;
+
+    chat.stop();
+
+    expect(clearIntervalSpy).toHaveBeenCalledWith(originalInterval);
+    expect(chat['userFetchClock']).toBeNull();
+  });
+
+  it('should clear messageFetchClock if it exists', () => {
+    const clearIntervalSpy = jest.spyOn(global, 'clearInterval');
+    const originalInterval = setInterval(() => {}, 1000);
+    chat['messageFetchClock'] = originalInterval;
+
+    chat.stop();
+
+    expect(clearIntervalSpy).toHaveBeenCalledWith(originalInterval);
+    expect(chat['messageFetchClock']).toBeNull();
+  });
+
+  it('should set stopSignal to true', () => {
+    chat.stop();
+
+    expect(chat['stopSignal']).toBe(true);
+  });
+});
