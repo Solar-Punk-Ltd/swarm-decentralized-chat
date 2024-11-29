@@ -376,6 +376,7 @@ export class SwarmChatUtils {
       return this.bytesToHex(mineResult.resourceId);
 
     } catch (error) {
+      console.error(error)
       this.handleError({
         error: error as unknown as Error,
         context: `mineResourceId`,

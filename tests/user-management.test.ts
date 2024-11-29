@@ -1182,3 +1182,114 @@ describe('host', () => {
     expect(createRandomSpy).toHaveBeenCalled();
   });
 });
+
+
+describe('mineResourceId', () => {
+  let chat: SwarmChat;
+  
+  const mockHexToBytes = jest.fn().mockReturnValue(new Uint8Array([5, 6, 7, 8]));
+  const mockBytesToHex = jest.fn().mockReturnValue('0x12345');
+  const mockHandleError = jest.fn().mockImplementation((errObject) => {
+    if (errObject.throw) {
+      console.error(`Error in ${errObject.context}`, errObject.error);
+    }
+  });
+
+  beforeEach(() => {
+    //jest.clearAllMocks();
+    //jest.resetAllMocks();
+
+    jest.mock('@anythread/gsoc', () => {
+      return {
+        InformationSignal: jest.fn().mockImplementation((url, options) => {
+          return {
+            mineResourceId: jest.fn().mockReturnValue({
+              resourceId: new Uint8Array([1, 2, 3, 4]),
+            }),
+          };
+        }),
+      };
+    });
+    
+    chat = new SwarmChat();
+    
+    (chat as any).hexToBytes = mockHexToBytes;
+    (chat as any).bytesToHex = mockBytesToHex;
+    (chat as any).handleError = mockHandleError;
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });  
+
+  it('should call mineResourceId and return hex resource ID', async () => {
+    const url = "http://example.com";
+    const stamp = "batch123";
+    const gateway = "deadbeaf";
+    const topic = "test-topic";
+
+    const result = await (chat as any).utils.mineResourceId(url, stamp, gateway, topic);
+
+    const InformationSignal = require('@anythread/gsoc').InformationSignal;
+    expect(InformationSignal).toHaveBeenCalledWith(url, {
+      postageBatchId: stamp,
+      consensus: {
+        id: `SwarmDecentralizedChat::${topic}`,
+        assertRecord: expect.any(Function)
+      }
+    });
+
+    expect(mockHexToBytes).toHaveBeenCalledWith(gateway);
+
+    const informationSignalInstance = InformationSignal.mock.instances[0];
+    expect(informationSignalInstance.mineResourceId).toHaveBeenCalledWith(
+      new Uint8Array([5, 6, 7, 8]), 
+      11
+    );
+
+    expect(mockBytesToHex).toHaveBeenCalledWith(new Uint8Array([1, 2, 3, 4]));
+
+    expect(result).toBe('0x12345');
+  });
+
+  it('should handle errors and return null', async () => {
+    const InformationSignal = require('@anythread/gsoc').InformationSignal;
+    InformationSignal.mockImplementationOnce(() => {
+      return {
+        mineResourceId: jest.fn().mockImplementation(() => {
+          throw new Error('Test error');
+        })
+      };
+    });
+
+    const url = "http://example.com";
+    const stamp = "batch123";
+    const gateway = "deafbeef";
+    const topic = "test-topic";
+
+    const result = await (chat as any).utils.mineResourceId(url, stamp, gateway, topic);
+
+    expect(mockHandleError).toHaveBeenCalledWith({
+      error: expect.any(Error),
+      context: 'mineResourceId',
+      throw: true
+    });
+
+    expect(result).toBeNull();
+  });
+
+  it('should use the default assertRecord function', async () => {
+    const url = "http://example.com";
+    const stamp = "batch123";
+    const gateway = "deadbeef";
+    const topic = "test-topic";
+
+    await (chat as any).utils.mineResourceId(url, stamp, gateway, topic);
+
+    const InformationSignal = require('@anythread/gsoc').InformationSignal;
+    const consensusOptions = InformationSignal.mock.calls[0][1].consensus;
+
+    expect(consensusOptions.assertRecord({})).toBe(true);
+    expect(consensusOptions.assertRecord({ some: 'input' })).toBe(true);
+  });
+});
