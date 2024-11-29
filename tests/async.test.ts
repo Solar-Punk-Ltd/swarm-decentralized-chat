@@ -464,3 +464,66 @@ describe('AsyncQueue.incrementHexString', () => {
     expect(asyncQueue.incrementHexString('00')).toBe('0000000000000001');
   });
 });
+
+
+describe('AsyncQueue.sleep', () => {
+  let asyncQueue: AsyncQueue;
+  let logger: pino.Logger;
+  let handleError: jest.Mock;
+
+  beforeEach(() => {
+    handleError = jest.fn();
+    logger = pino({ level: 'silent' });
+    asyncQueue = new AsyncQueue({}, handleError, logger);
+  });
+
+  it('should return a Promise', () => {
+    const sleepPromise = asyncQueue.sleep(1000);
+    expect(sleepPromise).toBeInstanceOf(Promise);
+  });
+
+  it('should resolve after the specified delay', async () => {
+    const mockCallback = jest.fn();
+    
+    const sleepPromise = asyncQueue.sleep(1000).then(mockCallback);
+    
+    expect(mockCallback).not.toHaveBeenCalled();
+    
+    jest.advanceTimersByTime(999);
+    expect(mockCallback).not.toHaveBeenCalled();
+    
+    jest.advanceTimersByTime(1);
+    
+    await sleepPromise;
+    
+    expect(mockCallback).toHaveBeenCalledTimes(1);
+  });
+
+  it('should work with different delay times', async () => {
+    const delays = [0, 100, 500, 1000];
+    
+    for (const delay of delays) {
+      const mockCallback = jest.fn();
+      
+      const sleepPromise = asyncQueue.sleep(delay).then(mockCallback);
+      
+      jest.advanceTimersByTime(delay);
+      
+      await sleepPromise;
+      
+      expect(mockCallback).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it('should handle very short delays', async () => {
+    const mockCallback = jest.fn();
+    
+    const sleepPromise = asyncQueue.sleep(0).then(mockCallback);
+    
+    jest.advanceTimersByTime(0);
+    
+    await sleepPromise;
+    
+    expect(mockCallback).toHaveBeenCalledTimes(1);
+  });
+});

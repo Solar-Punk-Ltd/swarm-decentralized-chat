@@ -109,7 +109,7 @@ describe('getDiagnostics', () => {
 });
 
 
-describe('sleep function', () => {
+describe('sleep', () => {
   let chat = new SwarmChat();
   jest.useFakeTimers();
 
