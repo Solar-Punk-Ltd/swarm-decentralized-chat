@@ -362,3 +362,48 @@ describe('AsyncQueue.decreaseMax', () => {
     expect(asyncQueue.getMaxParallel()).toBe(1);
   });
 });
+
+
+describe('AsyncQueue - clearQueue', () => {
+  let asyncQueue: AsyncQueue;
+  let logger: pino.Logger;
+  let handleError: jest.Mock;
+
+  beforeEach(() => {
+    handleError = jest.fn();
+    logger = pino({ level: 'silent' });
+    asyncQueue = new AsyncQueue({}, handleError, logger);
+  });
+
+  it('should clear the queue immediately if no tasks are in progress', async () => {
+    asyncQueue.enqueue(() => Promise.resolve());
+    asyncQueue['queue'] = [jest.fn(), jest.fn(), jest.fn()];
+    asyncQueue['inProgressCount'] = 0;
+    asyncQueue['isProcessing'] = false;
+
+    await asyncQueue.clearQueue();
+
+    expect(asyncQueue['queue']).toEqual([]);
+  });
+
+  it('should wait for in-progress tasks to finish before clearing', async () => {
+    // Create a deferred promise that we can manually control
+    let taskResolved = false;
+    const slowTask = () => new Promise<void>((resolve) => {
+      setTimeout(() => {
+        taskResolved = true;
+        resolve();
+      }, 50);
+    });
+
+    asyncQueue.enqueue(slowTask);
+
+    const clearQueuePromise = asyncQueue.clearQueue();
+
+    expect(asyncQueue['queue'].length).toBe(0);
+
+    await clearQueuePromise;
+
+    expect(taskResolved).toBe(true);
+  });
+});
