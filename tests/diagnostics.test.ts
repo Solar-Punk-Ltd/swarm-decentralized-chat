@@ -637,3 +637,40 @@ describe('RunningAverage.getAverage', () => {
     expect(avg.getAverage()).toBe(55);
   });
 });
+
+
+describe('generateHash', () => {
+  let chat: SwarmChat;
+
+  beforeEach(() => {
+    chat = new SwarmChat();
+  });
+
+  it('should generate a SHA-256 hash from the input string', async () => {
+    const seedString = 'test-seed';
+    const expectedHash = 'd63cd08d82aa4eb48e0cc64fb466e909bfc3879664c5caa8d8cdeda73c044190';
+
+    const hash = await (chat as any).utils['generateHash'](seedString);
+
+    expect(hash).toBe(expectedHash);
+  });
+
+  it('should handle empty strings correctly', async () => {
+    const seedString = '';
+    const expectedHash = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+
+    const hash = await (chat as any).utils['generateHash'](seedString);
+
+    expect(hash).toBe(expectedHash);
+  });
+
+  it('should generate different hashes for different input strings', async () => {
+    const seedString1 = 'string1';
+    const seedString2 = 'string2';
+
+    const hash1 = await (chat as any).utils['generateHash'](seedString1);
+    const hash2 = await (chat as any).utils['generateHash'](seedString2);
+
+    expect(hash1).not.toBe(hash2);
+  });
+});
