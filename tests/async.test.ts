@@ -431,3 +431,36 @@ describe('AsyncQueue.waitForProcessing', () => {
     expect(duration).toBeLessThan(50);
   });
 });
+
+
+describe('AsyncQueue.incrementHexString', () => {
+  let asyncQueue: AsyncQueue;
+  let logger: pino.Logger;
+  let handleError: jest.Mock;
+
+  beforeEach(() => {
+    handleError = jest.fn();
+    logger = pino({ level: 'silent' });
+    asyncQueue = new AsyncQueue({}, handleError, logger);
+  });
+
+  it('should increment a simple hex string by default', () => {
+    expect(asyncQueue.incrementHexString('a')).toBe('000000000000000b');
+    expect(asyncQueue.incrementHexString('f')).toBe('0000000000000010');
+  });
+
+  it('should increment a multi-character hex string', () => {
+    expect(asyncQueue.incrementHexString('ff')).toBe('0000000000000100');
+    expect(asyncQueue.incrementHexString('123')).toBe('0000000000000124');
+  });
+
+  it('should increment by a specified amount', () => {
+    expect(asyncQueue.incrementHexString('a', 2n)).toBe('000000000000000c');
+    expect(asyncQueue.incrementHexString('ff', 3n)).toBe('0000000000000102');
+  });
+
+  it('should increment zero correctly', () => {
+    expect(asyncQueue.incrementHexString('0')).toBe('0000000000000001');
+    expect(asyncQueue.incrementHexString('00')).toBe('0000000000000001');
+  });
+});
