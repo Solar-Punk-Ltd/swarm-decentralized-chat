@@ -59,40 +59,56 @@ describe('generateUserOwnedFeedId', () => {
 });
 
 
-/*describe('graffitiFeedWriterFromTopic', () => {
+describe('graffitiFeedWriterFromTopic', () => {
   let logger: pino.Logger;
   let mockHandleError: jest.Mock<void, [ErrorObject]>;
   let utils: SwarmChatUtils;
   let mockBee: jest.Mocked<Bee>;
   
   beforeEach(() => {
+    jest.clearAllMocks();
+    jest.resetAllMocks();
     logger = pino({ level: 'silent' });
   
     mockHandleError = jest.fn((errObject: ErrorObject) => {
       logger.error(`Error in ${errObject.context}: ${errObject.error.message}`);
     });
   
-    utils = new SwarmChatUtils(mockHandleError, logger);
+    const mockGenerateMetadata = jest.fn().mockReturnValue({
+      consensusHash: 'mock-consensus-hash',
+      graffitiSigner: 'mock-graffiti-signer'
+    });
 
     mockBee = {
-      makeFeedWriter: jest.fn()
+      makeFeedWriter: jest.fn().mockReturnValue('mock-feed-writer')
     } as unknown as jest.Mocked<Bee>;
 
-    jest.spyOn(utils, 'generateGraffitiFeedMetadata');
+    utils = new SwarmChatUtils(mockHandleError, logger);
+    utils.generateGraffitiFeedMetadata = mockGenerateMetadata;
   });
 
-  it('should create a feed writer with correct parameters for a given topic', () => {
-    const topic = 'test-topic';
-    const mockFeedWriter = {} as ReturnType<Bee['makeFeedWriter']>;
+  it('should call generateGraffitiFeedMetadata with the correct topic', () => {
+    const generateMetadataSpy = jest.spyOn(utils, 'generateGraffitiFeedMetadata');
     
-    mockBee.makeFeedWriter.mockReturnValue(mockFeedWriter);
-
-    const resultFeedWriter = utils.graffitiFeedWriterFromTopic(mockBee, topic);
-
-    expect(utils.generateGraffitiFeedMetadata).toHaveBeenCalledWith(topic);
-    expect(true).toBe("this-unit-test-is-not-done")
+    utils.graffitiFeedWriterFromTopic(mockBee, "test-topic");
+    
+    expect(generateMetadataSpy).toHaveBeenCalledWith("test-topic");
   });
-});*/
+
+  it('should call makeFeedWriter with correct parameters and return its value', () => {
+    const result = utils.graffitiFeedWriterFromTopic(mockBee, "test-topic");
+    
+    expect(mockBee.makeFeedWriter).toHaveBeenCalledWith(
+      'sequence', 
+      'mock-consensus-hash', 
+      'mock-graffiti-signer', 
+      undefined
+    );
+    
+    // Assert the result is returned from makeFeedWriter
+    expect(result).toBe('mock-feed-writer');
+  });
+});
 
 
 //graffitiFeedReaderFromTopic
