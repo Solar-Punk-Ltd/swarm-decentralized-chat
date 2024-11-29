@@ -1,6 +1,7 @@
 import { SwarmChat } from "../src/core";
 import { ErrorObject } from "../src/types";
 import pino from 'pino';
+import { SwarmChatUtils } from "../src/utils";
 
 
 describe('handleError', () => {
@@ -93,5 +94,42 @@ describe('changeLogLevel', () => {
 
       jest.clearAllMocks();
     });
+  });
+});
+
+
+describe('isNotFoundError', () => {
+  let logger: pino.Logger;
+  let mockHandleError: jest.Mock<void, [ErrorObject]>;
+  let utils: SwarmChatUtils;
+
+  beforeEach(() => {
+    logger = pino({ level: 'silent' });
+
+    mockHandleError = jest.fn((errObject: ErrorObject) => {
+      logger.error(`Error in ${errObject.context}: ${errObject.error.message}`);
+    });
+
+    utils = new SwarmChatUtils(mockHandleError, logger);
+  });
+
+  it('should return true if error stack includes "404"', () => {
+    const error = { stack: 'Some error occurred: 404', message: 'Error message' };
+    expect(utils.isNotFoundError(error)).toBe(true);
+  });
+
+  it('should return true if error message includes "Not Found"', () => {
+    const error = { stack: 'Some error stack', message: 'Not Found' };
+    expect(utils.isNotFoundError(error)).toBe(true);
+  });
+
+  it('should return true if error message includes "404"', () => {
+    const error = { stack: 'Some error stack', message: '404 - Not Found' };
+    expect(utils.isNotFoundError(error)).toBe(true);
+  });
+
+  it('should return false if error does not include "404" or "Not Found"', () => {
+    const error = { stack: 'Some error stack', message: 'Some other error' };
+    expect(utils.isNotFoundError(error)).toBe(false);
   });
 });
