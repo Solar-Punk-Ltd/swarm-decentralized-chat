@@ -174,35 +174,6 @@ export class SwarmChatUtils {
     }
   }
 
-  /** retryAwaitableAsync will retry a promise if fails, default retry number is 3, default delay between attempts is 250 ms */
-  async retryAwaitableAsync<T>(
-    fn: () => Promise<T>,
-    retries: number = 3,
-    delay: number = 250
-  ): Promise<T> {
-    return new Promise((resolve, reject) => {
-      fn()
-        .then(resolve)
-        .catch((error) => {
-          if (retries > 0) {
-            this.logger.info(`Retrying... Attempts left: ${retries}. Error: ${error.message}`);
-            setTimeout(() => {
-              this.retryAwaitableAsync(fn, retries - 1, delay)
-                .then(resolve)
-                .catch(reject);
-            }, delay);
-          } else {
-            this.handleError({
-              error: error as unknown as Error,
-              context: `Failed after ${retries} initial attempts. Last error: ${error.message}`,
-              throw: false
-            });
-            reject(error);
-          }
-        });
-    });
-  }
-
   /** Uploads a js object to Swarm, a valid stamp needs to be provided */
   async uploadObjectToBee(
     bee: Bee, 
