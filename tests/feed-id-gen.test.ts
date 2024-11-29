@@ -111,7 +111,70 @@ describe('graffitiFeedWriterFromTopic', () => {
 });
 
 
-//graffitiFeedReaderFromTopic
+describe('graffitiFeedReaderFromTopic', () => {
+  let logger: pino.Logger;
+  let mockHandleError: jest.Mock<void, [ErrorObject]>;
+  let utils: SwarmChatUtils;
+  let mockBee: jest.Mocked<Bee>;
+  
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.resetAllMocks();
+    logger = pino({ level: 'silent' });
+  
+    mockHandleError = jest.fn((errObject: ErrorObject) => {
+      logger.error(`Error in ${errObject.context}: ${errObject.error.message}`);
+    });
+  
+    const mockGenerateMetadata = jest.fn().mockReturnValue({
+      consensusHash: 'mock-consensus-hash',
+      graffitiSigner: {
+        address: 'mock-graffiti-signer-address'
+      }
+    });
+
+    mockBee = {
+      makeFeedReader: jest.fn().mockReturnValue('mock-feed-reader')
+    } as unknown as jest.Mocked<Bee>;
+
+    utils = new SwarmChatUtils(mockHandleError, logger);
+    utils.generateGraffitiFeedMetadata = mockGenerateMetadata;
+  });
+
+  it('should call generateGraffitiFeedMetadata with the correct topic', () => {
+    const generateMetadataSpy = jest.spyOn(utils, 'generateGraffitiFeedMetadata');
+    
+    utils.graffitiFeedReaderFromTopic(mockBee, "test-topic");
+    
+    expect(generateMetadataSpy).toHaveBeenCalledWith("test-topic");
+  });
+
+  it('should call makeFeedReader with correct parameters and return its value', () => {
+    const result = utils.graffitiFeedReaderFromTopic(mockBee, "test-topic");
+    
+    expect(mockBee.makeFeedReader).toHaveBeenCalledWith(
+      'sequence', 
+      'mock-consensus-hash', 
+      'mock-graffiti-signer-address', 
+      undefined
+    );
+    
+    expect(result).toBe('mock-feed-reader');
+  });
+
+  it('should pass through additional options to makeFeedReader', () => {
+    const mockOptions = { timeout: 5000 };
+
+    utils.graffitiFeedReaderFromTopic(mockBee, "test-topic", mockOptions);
+    
+    expect(mockBee.makeFeedReader).toHaveBeenCalledWith(
+      'sequence', 
+      'mock-consensus-hash', 
+      'mock-graffiti-signer-address', 
+      mockOptions
+    );
+  });
+});
 
 
 describe('generateGraffitiFeedMetadata', () => {
