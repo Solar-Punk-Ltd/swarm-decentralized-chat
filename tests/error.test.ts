@@ -1,5 +1,6 @@
 import { SwarmChat } from "../src/core";
 import { ErrorObject } from "../src/types";
+import pino from 'pino';
 
 
 describe('handleError', () => {
@@ -59,5 +60,38 @@ describe('handleError', () => {
     expect(() => chat['handleError'](errObject)).toThrow(
       `Error in ${errObject.context}`
     );
+  });
+});
+
+
+describe('changeLogLevel', () => {
+  let chat: SwarmChat;
+  let mockHandleError: jest.MockedFunction<typeof chat['handleError']>;
+  let mockPino: jest.MockedFunction<typeof pino>;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockHandleError = jest.fn();
+    chat = new SwarmChat();
+    chat['handleError'] = mockHandleError;
+
+    mockPino = jest.requireMock('pino') as jest.MockedFunction<typeof pino>;
+  });
+
+  it('should handle invalid log levels', () => {
+    const invalidLogLevels = ['INVALID', 'log', 'critical', '', null, undefined];
+
+    invalidLogLevels.forEach((level) => {
+      chat.changeLogLevel(level as any);
+
+      expect(mockHandleError).toHaveBeenCalledWith({
+        error: expect.any(Error),
+        context: 'changeLogLevel',
+        throw: false,
+      });
+      expect(mockPino).not.toHaveBeenCalled();
+
+      jest.clearAllMocks();
+    });
   });
 });
