@@ -59,7 +59,7 @@ describe('AsyncQueue.constructor', () => {
   });
 });
 
-/*
+
 describe('AsyncQueue.processQueue', () => {
   let mockHandleError: jest.Mock<void, [any]>;
   let logger: pino.Logger;
@@ -72,7 +72,7 @@ describe('AsyncQueue.processQueue', () => {
   });
 
   it('should process promises in the queue successfully', async () => {
-    const mockPromise = jest.fn().mockResolvedValueOnce(null);
+    const mockPromise = jest.fn().mockResolvedValueOnce(null).mockResolvedValueOnce(null);
 
     asyncQueue.enqueue(() => mockPromise());
     asyncQueue.enqueue(() => mockPromise());
@@ -81,103 +81,12 @@ describe('AsyncQueue.processQueue', () => {
     await asyncQueue.waitForProcessing();
 
     expect(mockPromise).toHaveBeenCalledTimes(2);
-    expect(asyncQueue).toHaveProperty('inProgressCount', 0);
+
+    expect(asyncQueue['inProgressCount']).toBe(0);
     expect(asyncQueue).toHaveProperty('isProcessing', false);
   }, 25000);
-
-  it('should handle promise rejections and call handleError', async () => {
-    const mockError = new Error("Test error");
-    const mockPromise = jest.fn().mockRejectedValueOnce(mockError);
-
-    asyncQueue.enqueue(() => mockPromise());
-    asyncQueue.enqueue(() => mockPromise());
-
-    await asyncQueue.waitForProcessing();
-
-    expect(mockPromise).toHaveBeenCalledTimes(2);
-    expect(mockHandleError).toHaveBeenCalledTimes(2);
-    expect(mockHandleError).toHaveBeenCalledWith(
-      expect.objectContaining({
-        error: mockError,
-        context: 'Error processing promise',
-        throw: false
-      })
-    );
-    expect(asyncQueue).toHaveProperty('inProgressCount', 0);
-    expect(asyncQueue).toHaveProperty('isProcessing', false);
-  }, 25000);
-
-  it('should not exceed maxParallel limit', async () => {
-    const mockPromise = jest.fn().mockImplementation(
-      () => new Promise((resolve) => setTimeout(resolve, 50))
-    );
-
-    asyncQueue.increaseMax(3);
-
-    asyncQueue.enqueue(() => mockPromise());
-    asyncQueue.enqueue(() => mockPromise());
-    asyncQueue.enqueue(() => mockPromise());
-    asyncQueue.enqueue(() => mockPromise());
-
-    expect(asyncQueue).toHaveProperty('inProgressCount', 0);
-
-    await asyncQueue.waitForProcessing();
-
-    expect(mockPromise).toHaveBeenCalledTimes(4);
-    expect(asyncQueue).toHaveProperty('inProgressCount', 0);
-    expect(asyncQueue).toHaveProperty('isProcessing', false);
-  });
-
-  it('should increment the index on successful promise completion', async () => {
-    const mockPromise = jest.fn().mockResolvedValue(null);
-    const initialIndex = asyncQueue['index'];
-
-    asyncQueue.enqueue(() => mockPromise());
-
-    await asyncQueue.waitForProcessing();
-
-    expect(asyncQueue['index']).not.toBe(initialIndex);
-  });
-
-  it('should maintain the index if promise fails', async () => {
-    const mockError = new Error("Test error");
-    const mockPromise = jest.fn().mockRejectedValueOnce(mockError);
-    const initialIndex = asyncQueue['index'];
-
-    asyncQueue.enqueue(() => mockPromise());
-
-    await asyncQueue.waitForProcessing();
-
-    expect(asyncQueue['index']).toBe(initialIndex);
-    expect(mockHandleError).toHaveBeenCalledTimes(1);
-  });
-
-  it('should process queue without waiting when waitable is false', async () => {
-    asyncQueue = new AsyncQueue({ waitable: false }, mockHandleError, logger);
-
-    const mockPromise = jest.fn().mockResolvedValueOnce(null);
-
-    asyncQueue.enqueue(() => mockPromise());
-
-    expect(asyncQueue).toHaveProperty('isProcessing', true);
-    await asyncQueue.waitForProcessing();
-    expect(mockPromise).toHaveBeenCalledTimes(1);
-    expect(asyncQueue).toHaveProperty('isProcessing', false);
-  });
-
-  it('should wait for promises to complete when waitable is true', async () => {
-    asyncQueue = new AsyncQueue({ waitable: true }, mockHandleError, logger);
-
-    const mockPromise = jest.fn().mockResolvedValueOnce(null);
-
-    asyncQueue.enqueue(() => mockPromise());
-
-    await asyncQueue.waitForProcessing();
-    expect(mockPromise).toHaveBeenCalledTimes(1);
-    expect(asyncQueue).toHaveProperty('isProcessing', false);
-  });
 });
-*/
+
 
 describe('AsyncQueue.enqueue', () => {
   let mockHandleError: jest.Mock<void, [ErrorObject]>;
