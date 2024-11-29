@@ -382,3 +382,83 @@ describe('SwarmChatUtils.orderMessages', () => {
     expect(result).toStrictEqual([]);
   });
 });
+
+
+describe('validateMessageData', () => {
+  let chat: SwarmChat;
+
+  beforeEach(() => {
+    chat = new SwarmChat();
+  });
+
+  it('should validate correct message data without errors', () => {
+    const validData = {
+      message: "Hello, world!",
+      username: "Alice",
+      address: "0x1234567890abcdef1234567890abcdef12345678",
+      timestamp: Date.now(),
+    };
+
+    expect(() => (chat as any).utils.validateMessageData(validData)).not.toThrow();
+  });
+
+  it('should throw an error if data is not an object', () => {
+    const invalidData = null;
+
+    expect(() => (chat as any).utils.validateMessageData(invalidData)).toThrow(
+      'Message data must be an object.'
+    );
+  });
+
+  it('should throw an error if message field is not a string', () => {
+    const invalidData = {
+      message: 123,
+      username: 'Alice',
+      address: '0x1234567890abcdef1234567890abcdef12345678',
+      timestamp: Date.now(),
+    };
+
+    expect(() => (chat as any).utils.validateMessageData(invalidData)).toThrow(
+      'Message field must be a string.'
+    );
+  });
+
+  it('should throw an error if username field is not a string', () => {
+    const invalidData = {
+      message: 'Hello, world!',
+      username: 123,
+      address: '0x1234567890abcdef1234567890abcdef12345678',
+      timestamp: Date.now(),
+    };
+
+    expect(() => (chat as any).utils.validateMessageData(invalidData)).toThrow(
+      'Username field must be a string.'
+    );
+  });
+
+  it('should throw an error if address is not a valid Ethereum address', () => {
+    const invalidData = {
+      message: 'Hello, world!',
+      username: 'Alice',
+      address: 'invalid-address',
+      timestamp: Date.now(),
+    };
+
+    expect(() => (chat as any).utils.validateMessageData(invalidData)).toThrow(
+      'Address must be a valid Ethereum address.'
+    );
+  });
+
+  it('should throw an error if timestamp is not a number', () => {
+    const invalidData = {
+      message: 'Hello, world!',
+      username: 'Alice',
+      address: '0x1234567890abcdef1234567890abcdef12345678',
+      timestamp: 'invalid-timestamp',
+    };
+
+    expect(() => (chat as any).utils.validateMessageData(invalidData)).toThrow(
+      'Timestamp must be a valid number.'
+    );
+  });
+});
