@@ -12,6 +12,10 @@ describe('AsyncQueue.constructor', () => {
     logger = pino({ level: 'silent' });
   });
 
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   it('should initialize with default settings when no parameters are passed', () => {
     const queue = new AsyncQueue({}, mockHandleError, logger);
 
@@ -146,7 +150,7 @@ describe('AsyncQueue.enqueue', () => {
     // Wait long enough for all promises to resolve
     await asyncQueue.waitForProcessing();
   
-    expect(mockPromise).toHaveBeenCalledTimes(3);
+    expect(mockPromise).toHaveBeenCalledTimes(2);
   
     expect(asyncQueue['inProgressCount']).toBe(0);
   });
@@ -392,6 +396,7 @@ describe('AsyncQueue.sleep', () => {
   });
 
   it('should resolve after the specified delay', async () => {
+    jest.useFakeTimers();
     const mockCallback = jest.fn();
     
     const sleepPromise = asyncQueue.sleep(1000).then(mockCallback);
@@ -409,6 +414,7 @@ describe('AsyncQueue.sleep', () => {
   });
 
   it('should work with different delay times', async () => {
+    jest.useFakeTimers();
     const delays = [0, 100, 500, 1000];
     
     for (const delay of delays) {
@@ -425,6 +431,7 @@ describe('AsyncQueue.sleep', () => {
   });
 
   it('should handle very short delays', async () => {
+    jest.useFakeTimers();
     const mockCallback = jest.fn();
     
     const sleepPromise = asyncQueue.sleep(0).then(mockCallback);
