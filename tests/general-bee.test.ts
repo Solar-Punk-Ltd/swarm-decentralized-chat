@@ -1,4 +1,4 @@
-/*import { BatchId, Bee, Reference } from "@ethersphere/bee-js";
+import { BatchId, Bee, Reference } from "@ethersphere/bee-js";
 import { SwarmChat } from "../src/core";
 import { InformationSignal } from "@anythread/gsoc";
 
@@ -33,14 +33,21 @@ describe('uploadObjectToBee', () => {
     const mockUploadResult = { reference: 'mock-reference' as Reference };
     const serializeGraffitiRecordSpy = jest.spyOn((chat as any).utils, 'serializeGraffitiRecord');
     
+    // Capture the serialized object
+    let capturedSerializedObject: string | undefined;
+    serializeGraffitiRecordSpy.mockImplementation((obj) => {
+      capturedSerializedObject = JSON.stringify(obj);
+      return capturedSerializedObject;
+    });
+  
     mockBee.uploadData.mockResolvedValue(mockUploadResult);
-
+  
     const result = await (chat as any).utils.uploadObjectToBee(mockBee, mockObject, mockStamp);
-
+  
     expect(serializeGraffitiRecordSpy).toHaveBeenCalledWith(mockObject);
     expect(mockBee.uploadData).toHaveBeenCalledWith(
       mockStamp,
-      mockSerializedObject,
+      capturedSerializedObject,
       { redundancyLevel: 4 }
     );
     expect(result).toEqual(mockUploadResult);
@@ -128,4 +135,4 @@ describe('sendMessageToGSOC', () => {
   //it('should call write')
 
   //it('should throw error, if write fails')
-});*/
+});
