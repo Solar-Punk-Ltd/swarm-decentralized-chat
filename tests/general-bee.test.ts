@@ -57,19 +57,21 @@ describe('uploadObjectToBee', () => {
   it('should return null and call handleError if upload fails', async () => {
     const mockObject = { key: 'value' };
     const mockError = new Error('Upload failed');
+    const handleErrorSpy = jest.spyOn((chat as any).utils, 'handleError');
+    const serializeGraffitiRecordSpy = jest.spyOn((chat as any).utils, 'serializeGraffitiRecord');
     
     mockBee.uploadData.mockRejectedValue(mockError);
-
+  
     const result = await (chat as any).utils.uploadObjectToBee(mockBee, mockObject, mockStamp);
-
-    expect((chat as any).utils.serializeGraffitiRecord).toHaveBeenCalledWith(mockObject);
+  
+    expect(serializeGraffitiRecordSpy).toHaveBeenCalledWith(mockObject);
     expect(mockBee.uploadData).toHaveBeenCalledWith(
       mockStamp,
-      mockSerializedObject,
+      serializeGraffitiRecordSpy.mock.results[0].value,
       { redundancyLevel: 4 }
     );
     expect(result).toBeNull();
-    expect((chat as any).handleError).toHaveBeenCalledWith({
+    expect(handleErrorSpy).toHaveBeenCalledWith({
       error: mockError,
       context: 'uploadObjectToBee',
       throw: false
