@@ -124,7 +124,7 @@ export class SwarmChat {
     this.messagesQueue = new AsyncQueue({ waitable: true, max: 4 }, this.handleError.bind(this), this.logger);
     this.reqTimeAvg = new RunningAverage(1000, this.logger);
 
-    this.logger.info(`SwarmChat created, version: v0.1.16 or above`);
+    this.logger.info(`SwarmChat created, version: v0.2.0 or above`);
   }
 
   /** With getChatActions, it's possible to listen to events on front end or anywhere outside the library. 
