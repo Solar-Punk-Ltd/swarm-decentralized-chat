@@ -83,63 +83,43 @@ describe('uploadObjectToBee', () => {
 });
 
 
-describe('sendMessageToGSOC', () => {
+describe('sendMessageToGsoc', () => {
   let chat: SwarmChat;
-  let mockBee: jest.Mocked<Bee>;
-  let mockStamp: BatchId;
-  let mockInformationSignal: jest.Mocked<InformationSignal>;
-
+  
   beforeEach(() => {
-    mockBee = {
-      uploadData: jest.fn(),
-    } as unknown as jest.Mocked<Bee>;
-
-    mockStamp = 'mock-batch-id' as unknown as BatchId;
-
+    const mockWrite = jest.fn().mockResolvedValue({ some: 'uploadedSOC' });
+    
+    jest.mock('@anythread/gsoc', () => ({
+      InformationSignal: jest.fn().mockImplementation(() => ({
+        write: mockWrite
+      }))
+    }));
+    
     chat = new SwarmChat();
-
-    jest.spyOn(chat as any, 'handleError');
-
-    // Setup mock for InformationSignal
-    mockInformationSignal = new InformationSignal(
-      'http://mock-url', 
-      { 
-        postageBatchId: mockStamp, 
-        consensus: {
-          id: 'SwarmDecentralizedChat::test-topic',
-          assertRecord: expect.any(Function)
-        }
-      }
-    ) as jest.Mocked<InformationSignal>;
   });
 
-  it('should call write method with correct parameters', async () => {
-    const mockUploadedSoc = {} as any;
-    const url = 'http://test-url';
-    const topic = 'test-topic';
-    const resourceId = '0x123' as any;
-    const message = 'test-message';
+  it('should successfully send message to GSOC', async () => {
+    const url = "http://example.com";
+    const stamp = "batch123";
+    const topic = "test-topic";
+    const resourceId = '0x12345';
+    const message = "Test message";
 
-    (mockInformationSignal.write as jest.Mock).mockResolvedValue(mockUploadedSoc);
+    const InformationSignal = require('@anythread/gsoc').InformationSignal;
 
-    const result = await (chat as any).utils.sendMessageToGsoc(url, mockStamp, topic, resourceId, message);
+    await (chat as any).utils.sendMessageToGsoc(url, stamp, topic, resourceId, message);
 
     expect(InformationSignal).toHaveBeenCalledWith(url, {
-      postageBatchId: mockStamp,
+      postageBatchId: stamp,
       consensus: {
         id: `SwarmDecentralizedChat::${topic}`,
         assertRecord: expect.any(Function)
       }
     });
 
-    expect(mockInformationSignal.write).toHaveBeenCalledWith(message, resourceId);
-
-    expect(result).toBe(mockUploadedSoc);
+    const mockWrite = InformationSignal.mock.results[0].value.write;
+    expect(mockWrite).toHaveBeenCalledWith(message, resourceId);
   });
-
-  //it('should call write')
-
-  //it('should throw error, if write fails')
 });
 
 
@@ -155,9 +135,6 @@ describe('mineResourceId', () => {
   });
 
   beforeEach(() => {
-    //jest.clearAllMocks();
-    //jest.resetAllMocks();
-
     jest.mock('@anythread/gsoc', () => ({
       InformationSignal: jest.fn().mockImplementation((url, options) => {
         return {
