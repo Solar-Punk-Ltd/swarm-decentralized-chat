@@ -5,7 +5,10 @@ import { InformationSignal } from "@anythread/gsoc";
 // Mock the InformationSignal class
 jest.mock('@anythread/gsoc', () => ({
   InformationSignal: jest.fn().mockImplementation(() => ({
-    write: jest.fn()
+    write: jest.fn(),
+    mineResourceId: jest.fn().mockReturnValue({
+      resourceId: new Uint8Array([1, 2, 3, 4])
+    }),
   }))
 }));
 
@@ -137,4 +140,62 @@ describe('sendMessageToGSOC', () => {
   //it('should call write')
 
   //it('should throw error, if write fails')
+});
+
+
+describe('mineResourceId', () => {
+  let chat: SwarmChat;
+  
+  const mockHexToBytes = jest.fn().mockReturnValue(new Uint8Array([5, 6, 7, 8]));
+  const mockBytesToHex = jest.fn().mockReturnValue('0x12345');
+  const mockHandleError = jest.fn().mockImplementation((errObject) => {
+    if (errObject.throw) {
+      console.error(`Error in ${errObject.context}`, errObject.error);
+    }
+  });
+
+  beforeEach(() => {
+    //jest.clearAllMocks();
+    //jest.resetAllMocks();
+
+    jest.mock('@anythread/gsoc', () => ({
+      InformationSignal: jest.fn().mockImplementation((url, options) => {
+        return {
+          
+        };
+      })
+    }));
+    
+    chat = new SwarmChat();
+    
+    (chat as any).hexToBytes = mockHexToBytes;
+    (chat as any).bytesToHex = mockBytesToHex;
+    (chat as any).handleError = mockHandleError;
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+    jest.resetAllMocks();
+  });
+
+  it('should call mineResourceId and return hex resource ID', async () => {
+    const url = "http://example.com";
+    const stamp = "batch123";
+    const gateway = "deadbeaf";
+    const topic = "test-topic";
+
+    const InformationSignal = require('@anythread/gsoc').InformationSignal;
+
+    const result = await (chat as any).utils.mineResourceId(url, stamp, gateway, topic);
+
+    expect(InformationSignal).toHaveBeenCalledWith(url, {
+      postageBatchId: stamp,
+      consensus: {
+        id: `SwarmDecentralizedChat::${topic}`,
+        assertRecord: expect.any(Function)
+      }
+    });
+
+    expect(result).toBe('01020304');
+  });
 });
