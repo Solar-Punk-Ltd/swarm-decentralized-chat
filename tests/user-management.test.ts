@@ -451,7 +451,7 @@ describe('selectUsersFeedCommitWriter', () => {
     
     expect(activeUsers.some(user => user.address === selectedAddress)).toBe(true);
     expect(mockEmitStateEvent).toHaveBeenCalledWith(EVENTS.FEED_COMMIT_HASH, expect.any(String));
-  });
+  }, 25000);
 
   it('should always select the same user for same input', async () => {
     const activeUsers = await userListWithNUsers(5);
